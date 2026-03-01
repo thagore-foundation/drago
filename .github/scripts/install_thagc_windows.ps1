@@ -1,5 +1,5 @@
 Param(
-  [string]$Tag = "v0.8.4",
+  [string]$Tag = "v1.0.0",
   [string]$Channel = "stable"
 )
 

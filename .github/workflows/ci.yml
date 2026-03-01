@@ -30,7 +30,7 @@ jobs:
             artifact_name: drago-windows-x86_64
             bin_name: drago.exe
     env:
-      THAGC_TAG: v0.8.4
+      THAGC_TAG: v1.0.0
       DRAGO_COLOR: never
     steps:
       - uses: actions/checkout@v4

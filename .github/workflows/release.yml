@@ -13,7 +13,7 @@ on:
       thagc_tag:
         description: "thagc release tag used to build drago"
         required: false
-        default: "v0.8.4"
+        default: "v1.0.0"
         type: string
 
 permissions:
@@ -43,7 +43,7 @@ jobs:
             archive_ext: zip
             bin_name: drago.exe
     env:
-      THAGC_TAG: ${{ github.event.inputs.thagc_tag || 'v0.8.4' }}
+      THAGC_TAG: ${{ github.event.inputs.thagc_tag || 'v1.0.0' }}
       DRAGO_COLOR: never
     steps:
       - uses: actions/checkout@v4

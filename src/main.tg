@@ -264,7 +264,7 @@ func main() -> i32:
     usage()
     return 0
   if (str.str_eq(cmd, "version")):
-    print("drago 0.1.0")
+    print("drago 1.0.0")
     return 0
   if (str.str_eq(cmd, "new")):
     if (scaffold.create_project(arg1) != 0):
