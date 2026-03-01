@@ -138,12 +138,9 @@ func append_lock_line_unique(lines: ptr, line: ptr):
     list.list_append(lines, line)
   return 0
 
-func sync_workspace_lock(root: ptr, quiet: i32) -> i32:
-  let declared = manifest.load_workspace_members(root)
-  if (list.list_count(declared) == 0):
-    return 1
-  let members = workspace_member_roots(root, quiet)
+func workspace_merged_lock_lines(root: ptr, quiet: i32) -> ptr:
   let merged = list.list_new()
+  let members = workspace_member_roots(root, quiet)
   let i: i64 = 0
   let n = list.list_count(members)
   while (i < n):
@@ -155,6 +152,13 @@ func sync_workspace_lock(root: ptr, quiet: i32) -> i32:
       append_lock_line_unique(merged, list.list_get(lines, j))
       j = j + 1
     i = i + 1
+  return merged
+
+func sync_workspace_lock(root: ptr, quiet: i32) -> i32:
+  let declared = manifest.load_workspace_members(root)
+  if (list.list_count(declared) == 0):
+    return 1
+  let merged = workspace_merged_lock_lines(root, quiet)
   if (lockfile.save_lines(root, merged) == 0):
     out.print_error("failed to write workspace drago.lock")
     return 0
@@ -240,6 +244,28 @@ func lock_consistent_for_member(member_root: ptr, features: ptr, all_features: i
   return ok
 
 func verify_locked_dependencies(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32) -> i32:
+  let declared = manifest.load_workspace_members(root)
+  if (list.list_count(declared) != 0):
+    let expected = workspace_merged_lock_lines(root, quiet)
+    let actual = lockfile.load_lines(root)
+    let ok = 1
+    let i: i64 = 0
+    let n = list.list_count(expected)
+    while (i < n):
+      let line = list.list_get(expected, i)
+      if (lock_line_exists(actual, line) == 0):
+        out.print_warning(str.concat("workspace lock missing entry: ", lockfile.pkg_name(line)), quiet)
+        ok = 0
+      i = i + 1
+    i = 0
+    n = list.list_count(actual)
+    while (i < n):
+      let line = list.list_get(actual, i)
+      if (lock_line_exists(expected, line) == 0):
+        out.print_warning(str.concat("workspace lock has unexpected entry: ", lockfile.pkg_name(line)), quiet)
+        ok = 0
+      i = i + 1
+    return ok
   let members = selected_member_roots(root, quiet, package_name)
   if (list.list_count(members) == 0):
     return 0

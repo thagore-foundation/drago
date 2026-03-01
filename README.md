@@ -66,6 +66,7 @@ members = ["crates/a", "crates/b"]
 - `drago run` at workspace root requires exactly one member (otherwise it is ambiguous).
 - Use `--package <name>` to target one member for `add/remove/build/run/test/check/install/update/tree/why/outdated`.
 - Mutating dependency commands (`add/remove/install/update`) at workspace root auto-sync a merged root `drago.lock`.
+- In workspace roots, `--locked` validates against the merged root `drago.lock` (all members), even when `--package` is used.
 - `why` now reports transitive dependency chains when package sources are available in local cache.
 
 ## Optional Dependencies
