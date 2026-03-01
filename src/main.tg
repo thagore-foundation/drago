@@ -71,8 +71,8 @@ func handle_cache(sub: ptr, quiet: i32) -> bool:
     out.print_separator(quiet)
     print(str.concat("  Total    ", out.format_bytes(source_bytes)))
     print("")
-    print("  drago cache clean     xoa compiled cache")
-    print("  drago cache purge     xoa tat ca")
+    print("  drago cache clean     remove compiled cache")
+    print("  drago cache purge     remove everything")
     return true
   if (str.str_eq(sub, "list")):
     let pkgs = cache.list_packages()
@@ -151,13 +151,13 @@ func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32) -> bool:
     let resolved = registry.info_version(info)
     out.print_done("Found", str.concat(pkg, str.concat(" ", str.concat(resolved, str.concat(" (", str.concat(tier, ")"))))), quiet)
   else:
-    out.print_warning(str.concat(pkg, " (unregistered - chua phat hanh)"), quiet)
-    print("     Khong co tren registry. Chua duoc ai review.")
+    out.print_warning(str.concat(pkg, " (unregistered - not published)"), quiet)
+    print("     Not found in registry. Not reviewed yet.")
     let yes = process.env("DRAGO_YES")
     if (str.str_eq(yes, "1") == false):
-      print("     Tiep tuc? [y/N] N (set DRAGO_YES=1 de tiep tuc)")
+      print("     Continue? [y/N] N (set DRAGO_YES=1 to continue)")
       return false
-    print("     Tiep tuc? [y/N] y")
+    print("     Continue? [y/N] y")
 
   if (utils.is_empty(wanted)):
     wanted = str.concat("", "")
@@ -171,7 +171,7 @@ func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32) -> bool:
   out.print_done("Updated", "drago.lock", quiet)
   print("")
   if (str.str_eq(tier, "publish")):
-    out.print_warning("Package chua duoc kiem duyet. Dung drago audit de kiem tra.", quiet)
+    out.print_warning("Package is not audited yet. Run drago audit to check.", quiet)
     return true
   out.print_summary_ok(str.concat("Added ", str.concat(title, str.concat(" ", out.format_ms(elapsed)))), quiet)
   return true
