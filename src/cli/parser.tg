@@ -56,6 +56,7 @@ pub func parse() -> ptr:
   let quiet = 0
   let verbose = 0
   let all_features = 0
+  let no_default_features = 0
   let seen_cmd = 0
 
   let i = 1
@@ -91,6 +92,10 @@ pub func parse() -> ptr:
       continue
     if (str.str_eq(a, "--all-features")):
       all_features = 1
+      i = i + 1
+      continue
+    if (str.str_eq(a, "--no-default-features")):
+      no_default_features = 1
       i = i + 1
       continue
     if (str.str_eq(a, "--features")):
@@ -134,7 +139,10 @@ pub func parse() -> ptr:
   let af = str.concat("", "0")
   if (all_features != 0):
     af = str.concat("", "1")
-  return str.concat(kind, str.concat("|", str.concat(arg1, str.concat("|", str.concat(arg2, str.concat("|", str.concat(q, str.concat("|", str.concat(v, str.concat("|", str.concat(package_name, str.concat("|", str.concat(features, str.concat("|", af))))))))))))))
+  let ndf = str.concat("", "0")
+  if (no_default_features != 0):
+    ndf = str.concat("", "1")
+  return str.concat(kind, str.concat("|", str.concat(arg1, str.concat("|", str.concat(arg2, str.concat("|", str.concat(q, str.concat("|", str.concat(v, str.concat("|", str.concat(package_name, str.concat("|", str.concat(features, str.concat("|", str.concat(af, str.concat("|", ndf))))))))))))))))
 
 pub func part(parsed: ptr, idx: i64) -> ptr:
   let parts = str.split(parsed, "|")
@@ -171,3 +179,8 @@ pub func parsed_all_features(parsed: ptr) -> i32:
 
 pub func parsed_package(parsed: ptr) -> ptr:
   return part(parsed, 5)
+
+pub func parsed_no_default_features(parsed: ptr) -> i32:
+  if (str.str_eq(part(parsed, 8), "1")):
+    return 1
+  return 0

@@ -35,15 +35,19 @@ pub func output_binary_path(project_root: ptr, project_name: ptr) -> ptr:
   let name = str.concat(project_name, ".bin")
   return path.join(path.join(project_root, "target"), name)
 
-pub func feature_cli_args(features: ptr, all_features: i32) -> ptr:
+pub func feature_cli_args(features: ptr, all_features: i32, no_default_features: i32) -> ptr:
   if (all_features != 0):
     return str.concat("", " --all-features")
+  let out = str.concat("", "")
+  if (no_default_features != 0):
+    out = str.concat(out, " --no-default-features")
   let selected = str.trim(str.concat("", features))
   if (str.str_eq(selected, "")):
-    return str.concat("", "")
-  return str.concat(" --features ", selected)
+    return out
+  out = str.concat(out, str.concat(" --features ", selected))
+  return out
 
-pub func link_project(project_root: ptr, target_triple: ptr, quiet: i32, features: ptr, all_features: i32) -> i32:
+pub func link_project(project_root: ptr, target_triple: ptr, quiet: i32, features: ptr, all_features: i32, no_default_features: i32) -> i32:
   let name = manifest.load_name(project_root)
   let entry_rel = manifest.load_entry(project_root)
   if (ensure_target_dir(project_root) == 0):
@@ -54,7 +58,7 @@ pub func link_project(project_root: ptr, target_triple: ptr, quiet: i32, feature
     fs.remove_path(out_bin)
   let entry = path.join(project_root, entry_rel)
   let cmd = str.concat(thagc_bin(), str.concat(" build ", str.concat(entry, str.concat(" -o ", out_bin))))
-  cmd = str.concat(cmd, feature_cli_args(features, all_features))
+  cmd = str.concat(cmd, feature_cli_args(features, all_features, no_default_features))
   if (str.str_eq(target_triple, "")):
     cmd = cmd
   else:

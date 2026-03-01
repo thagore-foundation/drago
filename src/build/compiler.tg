@@ -11,5 +11,5 @@ pub func build_flags() -> ptr:
 pub func target_triple() -> ptr:
   return process.env("DRAGO_TARGET")
 
-pub func build_project(project_root: ptr, quiet: i32, features: ptr, all_features: i32) -> i32:
-  return linker.link_project(project_root, target_triple(), quiet, features, all_features)
+pub func build_project(project_root: ptr, quiet: i32, features: ptr, all_features: i32, no_default_features: i32) -> i32:
+  return linker.link_project(project_root, target_triple(), quiet, features, all_features, no_default_features)

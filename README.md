@@ -28,7 +28,7 @@ $THAGC build src/main.tg -o drago.bin
 - `drago add <package> [version]`
 - `drago remove <package>`
 - `drago install`
-- `drago update`
+- `drago update [dependency]`
 - `drago publish`
 - `drago fmt`
 - `drago check`
@@ -41,9 +41,11 @@ $THAGC build src/main.tg -o drago.bin
   - `-p, --package <name>`
   - `--features <f1,f2>`
   - `--all-features`
+  - `--no-default-features`
 
-`--features` / `--all-features` are supported in `build`, `run`, `check`, `test`, `install`, `update`, `tree`, `why`, and `outdated`.
+`--features` / `--all-features` / `--no-default-features` are supported in `build`, `run`, `check`, `test`, `install`, `update`, `tree`, `why`, and `outdated`.
 `--package` selects one workspace member by package name or member path.
+`drago update <dependency>` updates one dependency (instead of all selected dependencies).
 
 ## Workspace
 
@@ -74,6 +76,7 @@ extra = ["dep:optdep"]
 
 - Optional dependencies are included when enabled by features (`dep:<name>` or `<name>` item).
 - `--all-features` enables all feature-defined optional dependencies.
+- `--no-default-features` disables the `default` feature set.
 
 ## Registry
 

@@ -534,7 +534,7 @@ func dep_feature_target(item: ptr) -> ptr:
     return str.substr(token, 4, n - 4)
   return token
 
-pub func load_dependencies_for_features(project_root: ptr, feature_csv: ptr, all_features: i32) -> ptr:
+pub func load_dependencies_for_features(project_root: ptr, feature_csv: ptr, all_features: i32, no_default_features: i32) -> ptr:
   let meta = collect_dependency_meta(project_root)
   let features = collect_feature_lines(project_root)
   let enabled_features = list.list_new()
@@ -544,7 +544,8 @@ pub func load_dependencies_for_features(project_root: ptr, feature_csv: ptr, all
     let names = feature_names(features)
     append_all(enabled_features, names)
   else:
-    list_append_unique(enabled_features, "default")
+    if (no_default_features == 0):
+      list_append_unique(enabled_features, "default")
     append_all(enabled_features, parse_array_values(str.concat("[", str.concat(feature_csv, "]"))))
 
   let changed = 1
