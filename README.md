@@ -39,7 +39,7 @@ $THAGC build src/main.tg -o drago.bin
 
 Default registry source:
 
-- `https://raw.githubusercontent.com/thagore-lang/registry/main`
+- `https://raw.githubusercontent.com/thagore-foundation/registry/main`
 
 Override registry base for local testing:
 

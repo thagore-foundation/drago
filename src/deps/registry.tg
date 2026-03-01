@@ -49,7 +49,7 @@ pub func info_tier(info: ptr) -> ptr:
 pub func registry_base() -> ptr:
   let base = process.env("DRAGO_REGISTRY_BASE")
   if (utils.is_empty(base)):
-    return str.concat("https:", str.concat("/", "/raw.githubusercontent.com/thagore-lang/registry/main"))
+    return str.concat("https:", str.concat("/", "/raw.githubusercontent.com/thagore-foundation/registry/main"))
   return base
 
 pub func registry_url(file_name: ptr) -> ptr:
@@ -104,7 +104,7 @@ pub func parse_package_from_yaml(pkg: ptr, tier: ptr, yaml_text: ptr) -> ptr:
           continue
         break
       if (utils.is_empty(repo)):
-        repo = str.concat("thagore-lang/", pkg)
+        repo = str.concat("thagore-foundation/", pkg)
       return info_make(1, pkg, version, repo, checksum, tier)
     i = i + 1
   return info_make(0, pkg, str.concat("", ""), str.concat("", ""), str.concat("", ""), tier)
@@ -196,7 +196,7 @@ pub func reg_publish_project(project_root: ptr) -> i32:
     print("ERROR: GITHUB_TOKEN is required for publish")
     return 0
   let body = str.concat("publish ", str.concat(name, str.concat("@", version)))
-  let rc = http.http_post(str.concat("https:", str.concat("/", "/api.github.com/repos/thagore-lang/registry/issues")), body, 5000)
+  let rc = http.http_post(str.concat("https:", str.concat("/", "/api.github.com/repos/thagore-foundation/registry/issues")), body, 5000)
   if (rc == 0):
     print("ERROR: publish failed")
     return 0
