@@ -156,8 +156,7 @@ jobs:
             --link-lib=shell32 `
             --link-lib=ws2_32 `
             --link-lib=iphlpapi `
-            --link-lib=bcrypt `
-            --link-lib=msvcp140
+            --link-lib=bcrypt
         shell: pwsh
 
       - name: Smoke test (POSIX)
