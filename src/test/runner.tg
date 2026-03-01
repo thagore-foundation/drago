@@ -2,10 +2,13 @@ import lib.fs as fs
 import lib.map as map
 import lib.path as path
 import lib.process as process
+import lib.time as time
 import std.list as list
 import std.string as str
 import src.core.utils as utils
+import src.cli.output as out
 import src.build.linker as linker
+import src.project.manifest as manifest
 
 pub func is_test_file(name: ptr) -> i32:
   if (utils.utils_contains(name, "test")):
@@ -31,36 +34,44 @@ pub func discover_tests(project_root: ptr) -> ptr:
   return out
 
 pub func run_tests(project_root: ptr, quiet: i32) -> i32:
+  out.print_action("🧪", str.concat("Testing ", str.concat(manifest.load_name(project_root), str.concat(" v", manifest.load_version(project_root)))), quiet)
   let tests = discover_tests(project_root)
   let n = list.list_count(tests)
   if (n == 0):
-    print("no tests found")
+    out.print_warning("No tests found", quiet)
     return 1
 
   let target_dir = path.join(project_root, "target")
   fs.mkdir(target_dir)
 
+  let started_all = time.now_ms()
   let i: i64 = 0
-  let ok = 1
+  let ok: i32 = 1
+  let passed: i64 = 0
+  let failed: i64 = 0
   while (i < n):
     let test_file = list.list_get(tests, i)
     let out_bin = path.join(target_dir, str.concat("test_", str.concat(str.from_int(i), ".bin")))
     let cmd_build = str.concat(linker.thagc_bin(), str.concat(" build ", str.concat(test_file, str.concat(" -o ", out_bin))))
-    let start = process.capture("date +%s%3N")
+    let start = time.now_ms()
     if (process.run(cmd_build) != 0):
-      print(str.concat("✗ fail ", test_file))
+      out.print_error(str.concat(test_file, " (compile failed)"))
       ok = 0
+      failed = failed + 1
       i = i + 1
       continue
     let run_rc = process.run(out_bin)
-    let end = process.capture("date +%s%3N")
-    let elapsed = str.to_int(str.trim(end)) - str.to_int(str.trim(start))
+    let elapsed = time.now_ms() - start
     if (run_rc == 0):
-      if (quiet == 0):
-        print(str.concat("✓ pass ", str.concat(test_file, str.concat(" (", str.concat(str.from_int(elapsed), "ms)")))))
+      passed = passed + 1
+      out.print_done(test_file, out.format_ms(elapsed), quiet)
     else:
-      print(str.concat("✗ fail ", str.concat(test_file, str.concat(" (exit=", str.concat(str.from_int(run_rc), ")")))))
-      print(str.concat("  at: ", test_file))
+      failed = failed + 1
+      out.print_error(str.concat(test_file, str.concat(" (exit=", str.concat(str.from_int(run_rc), ")"))))
+      print(str.concat("    │ at: ", test_file))
       ok = 0
     i = i + 1
+  print("")
+  let total_elapsed = time.now_ms() - started_all
+  print(str.concat("  ", str.concat(str.from_int(passed), str.concat(" passed  ", str.concat(str.from_int(failed), str.concat(" failed  ", out.format_ms(total_elapsed)))))))
   return ok

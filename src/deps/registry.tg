@@ -57,7 +57,11 @@ pub func registry_url(file_name: ptr) -> ptr:
 
 pub func fetch_url_text(url: ptr) -> ptr:
   http.http_get(url, 5000)
-  let cmd = str.concat("curl -fsSL \"", str.concat(url, "\""))
+  let null_dev = str.concat("", "/dev/null")
+  let os_name = process.env("OS")
+  if (str.str_eq(os_name, "Windows_NT")):
+    null_dev = str.concat("", "NUL")
+  let cmd = str.concat("curl -fsSL \"", str.concat(url, str.concat("\" 2>", null_dev)))
   return process.capture(cmd)
 
 pub func value_after_colon(line: ptr) -> ptr:

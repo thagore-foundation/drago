@@ -1,4 +1,7 @@
+import lib.fs as fs
+import lib.map as map
 import lib.process as process
+import std.list as list
 import std.string as str
 
 func env_value(name: ptr) -> ptr:
@@ -54,17 +57,93 @@ func style(code: ptr, text: ptr) -> ptr:
     return text
   return str.concat("\x1b[", str.concat(code, str.concat("m", str.concat(text, "\x1b[0m"))))
 
-pub func print_header(title: ptr, quiet: i32):
+func is_int_text(text: ptr) -> bool:
+  let t = str.trim(text)
+  if (str.str_eq(t, "")):
+    return false
+  let n = str.to_int(t)
+  return str.str_eq(str.from_int(n), t)
+
+func repeat_space(count: i64) -> ptr:
+  let out = str.concat("", "")
+  let i: i64 = 0
+  while (i < count):
+    out = str.concat(out, " ")
+    i = i + 1
+  return out
+
+func join_parts_from(parts: ptr, start: i64) -> ptr:
+  let out = str.concat("", "")
+  let i = start
+  let n = list.list_count(parts)
+  while (i < n):
+    let p = list.list_get(parts, i)
+    if (i == start):
+      out = str.concat(out, p)
+    else:
+      out = str.concat(out, str.concat(":", p))
+    i = i + 1
+  return out
+
+func line_at(raw: ptr, line_no: i64) -> ptr:
+  if (line_no <= 0):
+    return str.concat("", "")
+  let lines = str.split(raw, "\n")
+  if (map.map_is_null_ptr(lines) == 1):
+    return str.concat("", "")
+  let idx = line_no - 1
+  if (list.list_count(lines) <= idx):
+    return str.concat("", "")
+  return list.list_get(lines, idx)
+
+pub func format_ms(ms: i64) -> ptr:
+  return str.concat("(", str.concat(str.from_int(ms), "ms)"))
+
+pub func format_seconds_tenth(ms: i64) -> ptr:
+  let sec = ms / 1000
+  let rem = ms - (sec * 1000)
+  let tenth = rem / 100
+  return str.concat(str.from_int(sec), str.concat(".", str.concat(str.from_int(tenth), "s")))
+
+pub func format_bytes(bytes: i64) -> ptr:
+  let mb_unit: i64 = 1048576
+  let kb_unit: i64 = 1024
+  if (bytes >= mb_unit):
+    let whole = bytes / mb_unit
+    let rem = bytes - (whole * mb_unit)
+    let tenth = (rem * 10) / mb_unit
+    return str.concat(str.from_int(whole), str.concat(".", str.concat(str.from_int(tenth), " MB")))
+  if (bytes >= kb_unit):
+    let whole = bytes / kb_unit
+    return str.concat(str.from_int(whole), " KB")
+  return str.concat(str.from_int(bytes), " B")
+
+pub func print_action(icon: ptr, title: ptr, quiet: i32):
   if (quiet != 0):
     return 0
-  print(style("1;36", str.concat("  🔨 ", title)))
+  print(style("1;36", str.concat("  ", str.concat(icon, str.concat(" ", title)))))
   print("")
   return 1
 
-pub func print_success(msg: ptr, quiet: i32):
+pub func print_progress(name: ptr, detail: ptr, quiet: i32):
   if (quiet != 0):
     return 0
-  print(style("1;32", str.concat("  ✓ ", msg)))
+  if (str.str_eq(detail, "")):
+    print(style("1;34", str.concat("  ○ ", name)))
+    return 1
+  print(style("1;34", str.concat("  ○ ", str.concat(name, str.concat(" ", detail)))))
+  return 1
+
+pub func print_done(name: ptr, detail: ptr, quiet: i32):
+  if (quiet != 0):
+    return 0
+  if (str.str_eq(name, "")):
+    print(style("1;32", str.concat("  ✓ ", detail)))
+    return 1
+  if (str.str_eq(detail, "")):
+    print(style("1;32", str.concat("  ✓ ", name)))
+    return 1
+  print(style("1;32", str.concat("  ✓ ", str.concat(name, str.concat(" ", detail)))))
   return 1
 
 pub func print_warning(msg: ptr, quiet: i32):
@@ -77,10 +156,14 @@ pub func print_error(msg: ptr):
   print(style("1;31", str.concat("  ✗ ", msg)))
   return 1
 
-pub func print_step(msg: ptr, quiet: i32):
+pub func print_summary_ok(msg: ptr, quiet: i32):
   if (quiet != 0):
     return 0
-  print(style("1;34", str.concat("  ○ ", msg)))
+  print(style("1;32", str.concat("  ✅ ", msg)))
+  return 1
+
+pub func print_summary_fail(msg: ptr):
+  print(style("1;31", str.concat("  ❌ ", msg)))
   return 1
 
 pub func print_separator(quiet: i32):
@@ -88,3 +171,71 @@ pub func print_separator(quiet: i32):
     return 0
   print(style("2;37", "  ─────────────────────"))
   return 1
+
+func print_compiler_error_line(line: ptr):
+  let parts = str.split(line, ":")
+  if (map.map_is_null_ptr(parts) == 1):
+    print(style("1;31", str.concat("  ", line)))
+    return 0
+  if (list.list_count(parts) < 5):
+    print(style("1;31", str.concat("  ", line)))
+    return 0
+
+  let file = str.trim(list.list_get(parts, 0))
+  let ln_text = str.trim(list.list_get(parts, 1))
+  let col_text = str.trim(list.list_get(parts, 2))
+  let code = str.trim(list.list_get(parts, 3))
+  let msg = str.trim(join_parts_from(parts, 4))
+
+  if (is_int_text(ln_text) == false):
+    print(style("1;31", str.concat("  ", line)))
+    return 0
+  if (is_int_text(col_text) == false):
+    print(style("1;31", str.concat("  ", line)))
+    return 0
+
+  print(style("1;31", str.concat("  ", str.concat(code, str.concat(": ", msg)))))
+  if (fs.exists(file) == 0):
+    return 0
+  let body = fs.read_file(file)
+  if (map.map_is_null_ptr(body) == 1):
+    return 0
+  let ln = str.to_int(ln_text)
+  let col = str.to_int(col_text)
+  let source_line = line_at(body, ln)
+  if (str.str_eq(source_line, "")):
+    return 0
+  print(str.concat("    ", str.concat(str.from_int(ln), str.concat(" │ ", source_line))))
+  let caret_pad = repeat_space(col - 1)
+  print(str.concat("      │ ", str.concat(caret_pad, "^")))
+  return 0
+
+pub func print_compiler_errors(raw: ptr):
+  if (map.map_is_null_ptr(raw) == 1):
+    return 0
+  let lines = str.split(raw, "\n")
+  if (map.map_is_null_ptr(lines) == 1):
+    return 0
+  let i: i64 = 0
+  let n = list.list_count(lines)
+  while (i < n):
+    let line = str.trim(list.list_get(lines, i))
+    if (str.str_eq(line, "")):
+      i = i + 1
+      continue
+    if (str.str_has(line, ": E")):
+      print_compiler_error_line(line)
+    else:
+      print(str.concat("  ", line))
+    i = i + 1
+  return 0
+
+# Backward-compatible wrappers
+pub func print_header(title: ptr, quiet: i32):
+  return print_action("🔨", title, quiet)
+
+pub func print_success(msg: ptr, quiet: i32):
+  return print_done("", msg, quiet)
+
+pub func print_step(msg: ptr, quiet: i32):
+  return print_progress(msg, "", quiet)

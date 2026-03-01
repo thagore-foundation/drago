@@ -1,7 +1,9 @@
 import lib.fs as fs
+import lib.map as map
 import lib.path as path
 import lib.process as process
 import std.string as str
+import src.cli.output as out
 import src.project.manifest as manifest
 
 pub func thagc_bin() -> ptr:
@@ -33,20 +35,33 @@ pub func output_binary_path(project_root: ptr, project_name: ptr) -> ptr:
   let name = str.concat(project_name, ".bin")
   return path.join(path.join(project_root, "target"), name)
 
-pub func link_project(project_root: ptr, target_triple: ptr) -> i32:
+pub func link_project(project_root: ptr, target_triple: ptr, quiet: i32) -> i32:
   let name = manifest.load_name(project_root)
   let entry_rel = manifest.load_entry(project_root)
   if (ensure_target_dir(project_root) == 0):
-    print("ERROR: cannot create target directory")
+    out.print_error("cannot create target directory")
     return 0
-  let out = output_binary_path(project_root, name)
+  let out_bin = output_binary_path(project_root, name)
+  if (fs.exists(out_bin) != 0):
+    fs.remove_path(out_bin)
   let entry = path.join(project_root, entry_rel)
-  let cmd = str.concat(thagc_bin(), str.concat(" build ", str.concat(entry, str.concat(" -o ", out))))
+  let cmd = str.concat(thagc_bin(), str.concat(" build ", str.concat(entry, str.concat(" -o ", out_bin))))
   if (str.str_eq(target_triple, "")):
     cmd = cmd
   else:
     cmd = str.concat(cmd, str.concat(" --target=", target_triple))
-  if (process.run(cmd) != 0):
-    print("ERROR: thagc link/build failed")
+  let captured = process.capture(str.concat(cmd, " 2>&1"))
+  if (fs.exists(out_bin) == 0):
+    if (map.map_is_null_ptr(captured) == 1):
+      out.print_error("thagc link/build failed")
+    else:
+      out.print_compiler_errors(captured)
+    out.print_summary_fail("Build failed")
     return 0
+  if (quiet == 0):
+    if (map.map_is_null_ptr(captured) == 1):
+      captured = str.concat("", "")
+    captured = str.trim(captured)
+    if (str.str_eq(captured, "") == false):
+      print(captured)
   return 1

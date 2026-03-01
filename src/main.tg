@@ -1,6 +1,8 @@
 import lib.fs as fs
+import lib.map as map
 import lib.path as path
 import lib.process as process
+import lib.time as time
 import std.list as list
 import std.string as str
 import src.build.compiler as compiler
@@ -40,11 +42,38 @@ func project_root() -> ptr:
 func project_name(root: ptr) -> ptr:
   return manifest.load_name(root)
 
+func project_version(root: ptr) -> ptr:
+  return manifest.load_version(root)
+
+func safe_list_count(items: ptr) -> i64:
+  let zero: i64 = 0
+  if (map.map_is_null_ptr(items) == 1):
+    return zero
+  return list.list_count(items)
+
 func handle_cache(sub: ptr, quiet: i32) -> bool:
   let init_rc = cache.ensure_layout()
   if (init_rc == 0):
     out.print_error("cannot initialize cache layout")
     return false
+  if (utils.is_empty(sub)):
+    out.print_action("📁", "Drago Cache", quiet)
+    let source_items = cache.list_packages()
+    let source_count = safe_list_count(source_items)
+    let source_bytes = cache.cache_size_bytes()
+    let compiled_items = fs.readdir(cache.compiled_root())
+    let compiled_count = safe_list_count(compiled_items)
+    let tarballs = fs.readdir(cache.cache_root())
+    let tarball_count = safe_list_count(tarballs)
+    print(str.concat("  Source   ", str.concat(str.from_int(source_count), str.concat(" packages    ", out.format_bytes(source_bytes)))))
+    print(str.concat("  Compiled ", str.concat(str.from_int(compiled_count), " targets")))
+    print(str.concat("  Tarballs ", str.concat(str.from_int(tarball_count), " files")))
+    out.print_separator(quiet)
+    print(str.concat("  Total    ", out.format_bytes(source_bytes)))
+    print("")
+    print("  drago cache clean     xoa compiled cache")
+    print("  drago cache purge     xoa tat ca")
+    return true
   if (str.str_eq(sub, "list")):
     let pkgs = cache.list_packages()
     let i: i64 = 0
@@ -66,23 +95,38 @@ func handle_cache(sub: ptr, quiet: i32) -> bool:
   return false
 
 func handle_build(root: ptr, quiet: i32) -> bool:
-  out.print_header(str.concat("Building ", project_name(root)), quiet)
+  let name = project_name(root)
+  let version = project_version(root)
+  out.print_action("🔨", str.concat("Building ", str.concat(name, str.concat(" v", version))), quiet)
+  let started = time.now_ms()
+  out.print_progress("src/main.tg", "compiling...", quiet)
   let conflict_rc = resolver.detect_version_conflicts(root)
   if (conflict_rc == 0):
+    out.print_summary_fail("Build failed")
     return false
   let build_rc = compiler.build_project(root, quiet)
   if (build_rc == 0):
     return false
-  let bin = linker.output_binary_path(root, project_name(root))
-  out.print_success(str.concat("Built -> ", bin), quiet)
+  let elapsed = time.now_ms() - started
+  let bin = linker.output_binary_path(root, name)
+  let size = fs.filesize(bin)
+  out.print_done("src/main.tg", out.format_ms(elapsed), quiet)
+  out.print_progress("linking...", "", quiet)
+  out.print_done("linked", "", quiet)
+  print("")
+  let rel_bin = str.concat("target/", str.concat(name, ".bin"))
+  let tail = str.concat(" (", str.concat(out.format_bytes(size), str.concat(", ", str.concat(out.format_seconds_tenth(elapsed), ")"))))
+  let summary = str.concat("Built ", str.concat(name, str.concat(" → ", str.concat(rel_bin, tail))))
+  out.print_summary_ok(summary, quiet)
   return true
 
 func handle_run(root: ptr, quiet: i32) -> bool:
   let build_ok = handle_build(root, quiet)
   if (build_ok == false):
     return false
+  print("")
+  out.print_action("🚀", str.concat("Running ", project_name(root)), quiet)
   out.print_separator(quiet)
-  out.print_step("Running", quiet)
   let bin = linker.output_binary_path(root, project_name(root))
   let rc = runner.run_binary(bin)
   if (rc == 0):
@@ -93,14 +137,43 @@ func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32) -> bool:
   if (utils.is_empty(pkg)):
     out.print_error("add requires package name")
     return false
-  out.print_header(str.concat("Adding ", pkg), quiet)
   let wanted = version
+  let title = pkg
+  if (utils.is_empty(wanted)):
+    title = pkg
+  else:
+    title = str.concat(pkg, str.concat("@", wanted))
+  out.print_action("📦", str.concat("Adding ", title), quiet)
+  let info = registry.find_package(pkg)
+  let tier = registry.info_tier(info)
+  let found = registry.info_found(info)
+  if (str.str_eq(found, "1")):
+    let resolved = registry.info_version(info)
+    out.print_done("Found", str.concat(pkg, str.concat(" ", str.concat(resolved, str.concat(" (", str.concat(tier, ")"))))), quiet)
+  else:
+    out.print_warning(str.concat(pkg, " (unregistered - chua phat hanh)"), quiet)
+    print("     Khong co tren registry. Chua duoc ai review.")
+    let yes = process.env("DRAGO_YES")
+    if (str.str_eq(yes, "1") == false):
+      print("     Tiep tuc? [y/N] N (set DRAGO_YES=1 de tiep tuc)")
+      return false
+    print("     Tiep tuc? [y/N] y")
+
   if (utils.is_empty(wanted)):
     wanted = str.concat("", "")
+  let started = time.now_ms()
   let add_rc = registry.reg_add_dependency(root, pkg, wanted)
   if (add_rc == 0):
+    out.print_summary_fail("Add failed")
     return false
-  out.print_success("Updated drago.toml and drago.lock", quiet)
+  let elapsed = time.now_ms() - started
+  out.print_done("Updated", "drago.toml", quiet)
+  out.print_done("Updated", "drago.lock", quiet)
+  print("")
+  if (str.str_eq(tier, "publish")):
+    out.print_warning("Package chua duoc kiem duyet. Dung drago audit de kiem tra.", quiet)
+    return true
+  out.print_summary_ok(str.concat("Added ", str.concat(title, str.concat(" ", out.format_ms(elapsed)))), quiet)
   return true
 
 func handle_remove(root: ptr, pkg: ptr, quiet: i32) -> bool:
@@ -117,19 +190,19 @@ func handle_remove(root: ptr, pkg: ptr, quiet: i32) -> bool:
   return true
 
 func handle_install(root: ptr, quiet: i32) -> bool:
-  out.print_header("Installing dependencies", quiet)
+  out.print_action("📦", "Installing dependencies", quiet)
   let install_rc = registry.reg_install_all(root)
   if (install_rc == 0):
     return false
-  out.print_success("Dependencies installed", quiet)
+  out.print_summary_ok("Dependencies installed", quiet)
   return true
 
 func handle_update(root: ptr, quiet: i32) -> bool:
-  out.print_header("Updating dependencies", quiet)
+  out.print_action("📦", "Updating dependencies", quiet)
   let update_rc = registry.reg_update_all(root)
   if (update_rc == 0):
     return false
-  out.print_success("Dependencies updated", quiet)
+  out.print_summary_ok("Dependencies updated", quiet)
   return true
 
 func handle_fmt(root: ptr, quiet: i32) -> bool:
@@ -142,24 +215,36 @@ func handle_fmt(root: ptr, quiet: i32) -> bool:
   return true
 
 func handle_check(root: ptr, quiet: i32) -> bool:
+  out.print_action("🔨", str.concat("Checking ", str.concat(project_name(root), str.concat(" v", project_version(root)))), quiet)
   let entry = path.join(root, manifest.load_entry(root))
-  let cmd = str.concat(linker.thagc_bin(), str.concat(" build ", str.concat(entry, " --emit-llvm -o target/check.bin")))
-  let rc = process.run(cmd)
-  if (rc != 0):
-    out.print_error("check failed")
+  let started = time.now_ms()
+  let out_file = path.join(path.join(root, "target"), "check.bin")
+  let out_file_ll = str.concat(out_file, ".ll")
+  if (fs.exists(out_file) != 0):
+    fs.remove_path(out_file)
+  if (fs.exists(out_file_ll) != 0):
+    fs.remove_path(out_file_ll)
+  let cmd = str.concat(linker.thagc_bin(), str.concat(" build ", str.concat(entry, str.concat(" --emit-llvm -o ", out_file))))
+  let captured = process.capture(str.concat(cmd, " 2>&1"))
+  if (fs.exists(out_file) == 0):
+    if (fs.exists(out_file_ll) != 0):
+      out.print_summary_ok(str.concat("Typecheck/build check passed ", out.format_ms(time.now_ms() - started)), quiet)
+      return true
+    out.print_compiler_errors(captured)
+    out.print_summary_fail("Check failed")
     return false
-  out.print_success("Typecheck/build check passed", quiet)
+  out.print_summary_ok(str.concat("Typecheck/build check passed ", out.format_ms(time.now_ms() - started)), quiet)
   return true
 
 func handle_publish(root: ptr, quiet: i32) -> bool:
-  out.print_header("Publishing package metadata", quiet)
+  out.print_action("📦", "Publishing package metadata", quiet)
   return registry.reg_publish_project(root) != 0
 
 func handle_audit(root: ptr, quiet: i32) -> bool:
-  out.print_header("Auditing dependencies", quiet)
+  out.print_action("📦", "Auditing dependencies", quiet)
   let ok = registry.reg_audit_dependencies(root)
   if (ok != 0):
-    out.print_success("No known issues found", quiet)
+    out.print_summary_ok("No known issues found", quiet)
   else:
     out.print_warning("Known issues detected", quiet)
   return true
@@ -183,7 +268,16 @@ func main() -> i32:
     return 0
   if (str.str_eq(cmd, "new")):
     if (scaffold.create_project(arg1) != 0):
-      out.print_success(str.concat("Created project ", arg1), quiet)
+      out.print_action("✨", str.concat("Created ", arg1), quiet)
+      print("")
+      print(str.concat("  ", arg1))
+      print("  ├── drago.toml")
+      print("  └── src/")
+      print("      └── main.tg")
+      print("")
+      print("  Get started:")
+      print(str.concat("    cd ", arg1))
+      print("    drago run")
       return 0
     return 1
   if (str.str_eq(cmd, "build")):

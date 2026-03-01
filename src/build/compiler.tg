@@ -12,4 +12,4 @@ pub func target_triple() -> ptr:
   return process.env("DRAGO_TARGET")
 
 pub func build_project(project_root: ptr, quiet: i32) -> i32:
-  return linker.link_project(project_root, target_triple())
+  return linker.link_project(project_root, target_triple(), quiet)
