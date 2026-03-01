@@ -112,6 +112,7 @@ jobs:
 
           $kitsRoot = "C:\Program Files (x86)\Windows Kits\10\Lib"
           $kitVersion = Get-ChildItem -Path $kitsRoot -Directory |
+            Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' } |
             Sort-Object Name -Descending |
             Select-Object -First 1
           if (-not $kitVersion) {
