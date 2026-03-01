@@ -34,6 +34,23 @@ $THAGC build src/main.tg -o drago.bin
 - `drago check`
 - `drago cache list|size|clean|purge|purge-unused`
 - `drago audit`
+- Global build flags:
+  - `--features <f1,f2>`
+  - `--all-features`
+
+`--features` / `--all-features` are supported in `build`, `run`, `check`, and `test`.
+
+## Workspace
+
+Drago supports workspace roots with `[workspace].members`.
+
+```toml
+[workspace]
+members = ["crates/a", "crates/b"]
+```
+
+- `drago build` / `drago check` / `drago test` at workspace root run for all members.
+- `drago run` at workspace root requires exactly one member (otherwise it is ambiguous).
 
 ## Registry
 

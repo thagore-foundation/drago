@@ -51,6 +51,34 @@ func safe_list_count(items: ptr) -> i64:
     return zero
   return list.list_count(items)
 
+func workspace_member_roots(root: ptr, quiet: i32) -> ptr:
+  let roots = list.list_new()
+  let members = manifest.load_workspace_members(root)
+  if (safe_list_count(members) == 0):
+    list.list_append(roots, root)
+    return roots
+
+  let i: i64 = 0
+  let n = list.list_count(members)
+  while (i < n):
+    let member = str.trim(list.list_get(members, i))
+    if (utils.is_empty(member)):
+      i = i + 1
+      continue
+    let member_root = member
+    if (utils.utils_starts_with(member, "/") == false):
+      member_root = path.join(root, member)
+    let member_manifest = path.join(member_root, "drago.toml")
+    if (fs.exists(member_manifest) != 0):
+      list.list_append(roots, member_root)
+    else:
+      out.print_warning(str.concat("Workspace member skipped (missing drago.toml): ", member), quiet)
+    i = i + 1
+
+  if (list.list_count(roots) == 0):
+    list.list_append(roots, root)
+  return roots
+
 func handle_cache(sub: ptr, quiet: i32) -> bool:
   let init_rc = cache.ensure_layout()
   if (init_rc == 0):
@@ -94,7 +122,7 @@ func handle_cache(sub: ptr, quiet: i32) -> bool:
   out.print_error("cache subcommand required: list|size|clean|purge|purge-unused")
   return false
 
-func handle_build(root: ptr, quiet: i32, features: ptr, all_features: i32) -> bool:
+func handle_build_single(root: ptr, quiet: i32, features: ptr, all_features: i32) -> bool:
   let name = project_name(root)
   let version = project_version(root)
   out.print_action("🔨", str.concat("Building ", str.concat(name, str.concat(" v", version))), quiet)
@@ -120,14 +148,31 @@ func handle_build(root: ptr, quiet: i32, features: ptr, all_features: i32) -> bo
   out.print_summary_ok(summary, quiet)
   return true
 
+func handle_build(root: ptr, quiet: i32, features: ptr, all_features: i32) -> bool:
+  let members = workspace_member_roots(root, quiet)
+  let n = list.list_count(members)
+  if (n > 1):
+    out.print_action("🧩", str.concat("Building workspace (", str.concat(str.from_int(n), " members)")), quiet)
+  let i: i64 = 0
+  while (i < n):
+    if (handle_build_single(list.list_get(members, i), quiet, features, all_features) == false):
+      return false
+    i = i + 1
+  return true
+
 func handle_run(root: ptr, quiet: i32, features: ptr, all_features: i32) -> bool:
-  let build_ok = handle_build(root, quiet, features, all_features)
+  let members = workspace_member_roots(root, quiet)
+  if (list.list_count(members) > 1):
+    out.print_error("run in workspace root is ambiguous; run inside a member package")
+    return false
+  let run_root = list.list_get(members, 0)
+  let build_ok = handle_build_single(run_root, quiet, features, all_features)
   if (build_ok == false):
     return false
   print("")
-  out.print_action("🚀", str.concat("Running ", project_name(root)), quiet)
+  out.print_action("🚀", str.concat("Running ", project_name(run_root)), quiet)
   out.print_separator(quiet)
-  let bin = linker.output_binary_path(root, project_name(root))
+  let bin = linker.output_binary_path(run_root, project_name(run_root))
   let rc = runner.run_binary(bin)
   if (rc == 0):
     return true
@@ -213,7 +258,7 @@ func handle_fmt(root: ptr, quiet: i32) -> bool:
   out.print_success("Format check completed", quiet)
   return true
 
-func handle_check(root: ptr, quiet: i32, features: ptr, all_features: i32) -> bool:
+func handle_check_single(root: ptr, quiet: i32, features: ptr, all_features: i32) -> bool:
   out.print_action("🔨", str.concat("Checking ", str.concat(project_name(root), str.concat(" v", project_version(root)))), quiet)
   let entry = path.join(root, manifest.load_entry(root))
   let started = time.now_ms()
@@ -236,6 +281,30 @@ func handle_check(root: ptr, quiet: i32, features: ptr, all_features: i32) -> bo
     out.print_summary_fail("Check failed")
     return false
   out.print_summary_ok(str.concat("Typecheck/build check passed ", out.format_ms(time.now_ms() - started)), quiet)
+  return true
+
+func handle_check(root: ptr, quiet: i32, features: ptr, all_features: i32) -> bool:
+  let members = workspace_member_roots(root, quiet)
+  let n = list.list_count(members)
+  if (n > 1):
+    out.print_action("🧩", str.concat("Checking workspace (", str.concat(str.from_int(n), " members)")), quiet)
+  let i: i64 = 0
+  while (i < n):
+    if (handle_check_single(list.list_get(members, i), quiet, features, all_features) == false):
+      return false
+    i = i + 1
+  return true
+
+func handle_test(root: ptr, quiet: i32, features: ptr, all_features: i32) -> bool:
+  let members = workspace_member_roots(root, quiet)
+  let n = list.list_count(members)
+  if (n > 1):
+    out.print_action("🧩", str.concat("Testing workspace (", str.concat(str.from_int(n), " members)")), quiet)
+  let i: i64 = 0
+  while (i < n):
+    if (test_runner.run_tests(list.list_get(members, i), quiet, features, all_features) == 0):
+      return false
+    i = i + 1
   return true
 
 func handle_publish(root: ptr, quiet: i32) -> bool:
@@ -293,7 +362,7 @@ func main() -> i32:
       return 0
     return 1
   if (str.str_eq(cmd, "test")):
-    if (test_runner.run_tests(root, quiet, features, all_features) != 0):
+    if (handle_test(root, quiet, features, all_features)):
       return 0
     return 1
   if (str.str_eq(cmd, "add")):

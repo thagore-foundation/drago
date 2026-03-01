@@ -145,6 +145,109 @@ pub func load_dependencies(project_root: ptr) -> ptr:
   toml.toml_free(h)
   return out
 
+func append_all(dst: ptr, src: ptr):
+  let i: i64 = 0
+  let n = list.list_count(src)
+  while (i < n):
+    let item = str.trim(list.list_get(src, i))
+    if (utils.is_empty(item) == false):
+      list.list_append(dst, item)
+    i = i + 1
+  return 0
+
+func parse_workspace_members_value(raw_value: ptr) -> ptr:
+  let out = list.list_new()
+  let value = str.concat("", raw_value)
+  value = str.replace(value, "[", "")
+  value = str.replace(value, "]", "")
+  value = str.replace(value, "\n", "")
+  let parts = str.split(value, ",")
+  if (map.map_is_null_ptr(parts) == 1):
+    return out
+  let i: i64 = 0
+  let n = list.list_count(parts)
+  while (i < n):
+    let member = str.trim(list.list_get(parts, i))
+    member = str.replace(member, "\"", "")
+    member = str.replace(member, "'", "")
+    if (utils.is_empty(member) == false):
+      list.list_append(out, member)
+    i = i + 1
+  return out
+
+func line_without_comment(raw_line: ptr) -> ptr:
+  return str.trim(raw_line)
+
+func value_after_equals(raw_line: ptr) -> ptr:
+  let parts = str.split(raw_line, "=")
+  if (map.map_is_null_ptr(parts) == 1):
+    return str.concat("", "")
+  if (list.list_count(parts) < 2):
+    return str.concat("", "")
+  return str.trim(list.list_get(parts, 1))
+
+pub func load_workspace_members(project_root: ptr) -> ptr:
+  let out = list.list_new()
+  let p = manifest_path(project_root)
+  if (fs.exists(p) == 0):
+    return out
+  let raw = fs.read_file(p)
+  if (map.map_is_null_ptr(raw) == 1):
+    return out
+  let lines = str.split(raw, "\n")
+  if (map.map_is_null_ptr(lines) == 1):
+    return out
+
+  let in_workspace = 0
+  let collecting_members = 0
+  let members_buffer = str.concat("", "")
+  let i: i64 = 0
+  let n = list.list_count(lines)
+  while (i < n):
+    let line = line_without_comment(list.list_get(lines, i))
+    if (utils.is_empty(line)):
+      i = i + 1
+      continue
+
+    if (collecting_members != 0):
+      members_buffer = str.concat(members_buffer, line)
+      if (str.str_has(line, "]")):
+        collecting_members = 0
+        append_all(out, parse_workspace_members_value(members_buffer))
+      i = i + 1
+      continue
+
+    if (str.str_starts(line, "[")):
+      if (str.str_eq(line, "[workspace]")):
+        in_workspace = 1
+      else:
+        in_workspace = 0
+      i = i + 1
+      continue
+
+    if (in_workspace == 0):
+      i = i + 1
+      continue
+    if (str.str_starts(line, "members") == false):
+      i = i + 1
+      continue
+
+    members_buffer = value_after_equals(line)
+    if (utils.is_empty(members_buffer)):
+      i = i + 1
+      continue
+    if (str.str_has(members_buffer, "[") == false):
+      i = i + 1
+      continue
+    if (str.str_has(members_buffer, "]")):
+      append_all(out, parse_workspace_members_value(members_buffer))
+      members_buffer = str.concat("", "")
+      i = i + 1
+      continue
+    collecting_members = 1
+    i = i + 1
+  return out
+
 pub func to_toml(name: ptr, version: ptr, entry: ptr, description: ptr, license: ptr, authors: ptr, dependencies: ptr) -> ptr:
   let out = str.concat("", "")
   out = str.concat(out, "[package]\n")
