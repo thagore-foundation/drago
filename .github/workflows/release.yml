@@ -13,7 +13,7 @@ on:
       thagc_tag:
         description: "thagc release tag used to build drago"
         required: false
-        default: "v1.0.0"
+        default: "v1.0.1"
         type: string
 
 permissions:
@@ -43,7 +43,6 @@ jobs:
             arch: aarch64
             archive_ext: tar.gz
             bin_name: drago.bin
-            optional: true
           - runner: windows-2022
             platform: windows
             arch: x86_64
@@ -56,7 +55,7 @@ jobs:
             archive_ext: zip
             bin_name: drago.exe
     env:
-      THAGC_TAG: ${{ github.event.inputs.thagc_tag || 'v1.0.0' }}
+      THAGC_TAG: ${{ github.event.inputs.thagc_tag || 'v1.0.1' }}
       DRAGO_COLOR: never
     steps:
       - uses: actions/checkout@v4
@@ -145,6 +144,22 @@ jobs:
 
           "LIB=$msvcLib;$ucrtLib;$umLib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "LIBPATH=$msvcLib;$ucrtLib;$umLib;$env:LIBPATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          $legacyDiaLibDir = "C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\DIA SDK\lib\amd64"
+          $legacyDiaLib = Join-Path $legacyDiaLibDir "diaguids.lib"
+          if (-not (Test-Path $legacyDiaLib)) {
+            $diaCandidates = @(
+              "C:\Program Files\Microsoft Visual Studio\2022\Community\DIA SDK\lib\amd64\diaguids.lib",
+              "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\DIA SDK\lib\amd64\diaguids.lib",
+              "C:\Program Files\Microsoft Visual Studio\2022\Professional\DIA SDK\lib\amd64\diaguids.lib",
+              "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\DIA SDK\lib\amd64\diaguids.lib"
+            )
+            $diaSource = $diaCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+            if ($diaSource) {
+              New-Item -ItemType Directory -Path $legacyDiaLibDir -Force | Out-Null
+              Copy-Item -Path $diaSource -Destination $legacyDiaLib -Force
+            }
+          }
 
       - name: Install thagc (Windows)
         if: runner.os == 'Windows'
@@ -237,9 +252,13 @@ jobs:
           required = [
               f"drago-{tag}-linux-x86_64.tar.gz",
               f"drago-{tag}-linux-aarch64.tar.gz",
+              f"drago-{tag}-macos-aarch64.tar.gz",
+              f"drago-{tag}-windows-x86_64.zip",
               f"drago-{tag}-windows-aarch64.zip",
               "SHA256SUMS-linux-x86_64.txt",
               "SHA256SUMS-linux-aarch64.txt",
+              "SHA256SUMS-macos-aarch64.txt",
+              "SHA256SUMS-windows-x86_64.txt",
               "SHA256SUMS-windows-aarch64.txt",
           ]
           missing = [name for name in required if not (dist / name).exists()]
