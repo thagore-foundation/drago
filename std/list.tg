@@ -1,0 +1,29 @@
+# List helpers backed by runtime string-array handles.
+
+extern func thag_str_array_new() -> ptr
+extern func thag_str_array_push(parts: ptr, value: ptr) -> i32
+extern func thag_str_array_remove(parts: ptr, index: i64) -> i32
+extern func thag_str_array_sort(parts: ptr) -> i32
+extern func thag_str_array_len(parts: ptr) -> i64
+extern func thag_str_array_get(parts: ptr, index: i64) -> ptr
+
+pub func list_new() -> ptr:
+  return thag_str_array_new()
+
+pub func list_append(list: ptr, value: ptr) -> i32:
+  return thag_str_array_push(list, value)
+
+pub func list_remove(list: ptr, index: i64) -> i32:
+  return thag_str_array_remove(list, index)
+
+pub func list_get(list: ptr, index: i64) -> ptr:
+  return thag_str_array_get(list, index)
+
+pub func list_sort(list: ptr) -> i32:
+  return thag_str_array_sort(list)
+
+pub func list_count(list: ptr) -> i64:
+  return thag_str_array_len(list)
+
+func list_len(list: ptr) -> i64:
+  return thag_str_array_len(list)

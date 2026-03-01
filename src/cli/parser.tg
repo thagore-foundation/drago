@@ -1,0 +1,113 @@
+import lib.process as process
+import std.list as list
+import std.string as str
+import src.core.utils as utils
+
+pub func command_from_text(raw: ptr) -> ptr:
+  if (str.str_eq(raw, "--help")):
+    return str.concat("", "help")
+  if (str.str_eq(raw, "help")):
+    return str.concat("", "help")
+  if (str.str_eq(raw, "--version")):
+    return str.concat("", "version")
+  if (str.str_eq(raw, "version")):
+    return str.concat("", "version")
+  if (str.str_eq(raw, "new")):
+    return str.concat("", "new")
+  if (str.str_eq(raw, "build")):
+    return str.concat("", "build")
+  if (str.str_eq(raw, "run")):
+    return str.concat("", "run")
+  if (str.str_eq(raw, "test")):
+    return str.concat("", "test")
+  if (str.str_eq(raw, "add")):
+    return str.concat("", "add")
+  if (str.str_eq(raw, "remove")):
+    return str.concat("", "remove")
+  if (str.str_eq(raw, "install")):
+    return str.concat("", "install")
+  if (str.str_eq(raw, "update")):
+    return str.concat("", "update")
+  if (str.str_eq(raw, "publish")):
+    return str.concat("", "publish")
+  if (str.str_eq(raw, "fmt")):
+    return str.concat("", "fmt")
+  if (str.str_eq(raw, "check")):
+    return str.concat("", "check")
+  if (str.str_eq(raw, "cache")):
+    return str.concat("", "cache")
+  if (str.str_eq(raw, "audit")):
+    return str.concat("", "audit")
+  return str.concat("", "")
+
+pub func parse() -> ptr:
+  let argc = process.argc()
+  let kind = str.concat("", "help")
+  let arg1 = str.concat("", "")
+  let arg2 = str.concat("", "")
+  let quiet = 0
+  let verbose = 0
+  let seen_cmd = 0
+
+  let i = 1
+  while (i < argc):
+    let a = process.argv(i)
+    if (str.str_eq(a, "--quiet")):
+      quiet = 1
+      i = i + 1
+      continue
+    if (str.str_eq(a, "--verbose")):
+      verbose = 1
+      i = i + 1
+      continue
+    if (seen_cmd == 0):
+      let k = command_from_text(a)
+      if (utils.is_empty(k)):
+        kind = str.concat("", "help")
+      else:
+        kind = k
+      seen_cmd = 1
+      i = i + 1
+      continue
+    if (utils.is_empty(arg1)):
+      arg1 = a
+      i = i + 1
+      continue
+    if (utils.is_empty(arg2)):
+      arg2 = a
+      i = i + 1
+      continue
+    i = i + 1
+
+  let q = str.concat("", "0")
+  if (quiet != 0):
+    q = str.concat("", "1")
+  let v = str.concat("", "0")
+  if (verbose != 0):
+    v = str.concat("", "1")
+  return str.concat(kind, str.concat("|", str.concat(arg1, str.concat("|", str.concat(arg2, str.concat("|", str.concat(q, str.concat("|", v))))))))
+
+pub func part(parsed: ptr, idx: i64) -> ptr:
+  let parts = str.split(parsed, "|")
+  if (list.list_count(parts) <= idx):
+    return str.concat("", "")
+  return list.list_get(parts, idx)
+
+pub func parsed_kind(parsed: ptr) -> ptr:
+  return part(parsed, 0)
+
+pub func parsed_arg1(parsed: ptr) -> ptr:
+  return part(parsed, 1)
+
+pub func parsed_arg2(parsed: ptr) -> ptr:
+  return part(parsed, 2)
+
+pub func parsed_quiet(parsed: ptr) -> i32:
+  if (str.str_eq(part(parsed, 3), "1")):
+    return 1
+  return 0
+
+pub func parsed_verbose(parsed: ptr) -> i32:
+  if (str.str_eq(part(parsed, 4), "1")):
+    return 1
+  return 0

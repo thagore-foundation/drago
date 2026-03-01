@@ -1,0 +1,17 @@
+import src.project.manifest as manifest
+import lib.fs as fs
+import lib.path as path
+
+func main() -> i32:
+  let root = "."
+  let tmp = path.join(root, "tmp_manifest_test")
+  fs.mkdir(tmp)
+  let ok = manifest.add_dependency(tmp, "http", "\"1.0.0\"")
+  if (ok == 0):
+    print("manifest add failed")
+    return 1
+  let name = manifest.load_name(tmp)
+  if (name == 0):
+    return 2
+  fs.remove_path(tmp)
+  return 0

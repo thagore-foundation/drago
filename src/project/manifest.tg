@@ -1,0 +1,232 @@
+import lib.fs as fs
+import lib.map as map
+import lib.path as path
+import lib.toml as toml
+import std.list as list
+import std.string as str
+import src.core.utils as utils
+
+pub func manifest_path(project_root: ptr) -> ptr:
+  return path.join(project_root, "drago.toml")
+
+pub func default_name() -> ptr:
+  return str.concat("", "app")
+
+pub func default_version() -> ptr:
+  return str.concat("", "0.1.0")
+
+pub func default_entry() -> ptr:
+  return str.concat("", "src/main.tg")
+
+pub func default_description() -> ptr:
+  return str.concat("", "")
+
+pub func default_license() -> ptr:
+  return str.concat("", "MIT")
+
+pub func default_authors() -> ptr:
+  return str.concat("", "")
+
+pub func parse_handle(project_root: ptr) -> ptr:
+  let p = manifest_path(project_root)
+  if (fs.exists(p) == 0):
+    return toml.toml_parse(str.concat("", ""))
+  let raw = fs.read_file(p)
+  if (map.map_is_null_ptr(raw) == 1):
+    return toml.toml_parse(str.concat("", ""))
+  return toml.toml_parse(raw)
+
+pub func load_name(project_root: ptr) -> ptr:
+  let h = parse_handle(project_root)
+  if (map.map_is_null_ptr(h) == 1):
+    return default_name()
+  let pkg = toml.toml_get_section(h, "package")
+  let out = toml.toml_get_str(pkg, "name")
+  if (map.map_is_null_ptr(out) == 1):
+    toml.toml_free(h)
+    return default_name()
+  if (utils.is_empty(out)):
+    toml.toml_free(h)
+    return default_name()
+  toml.toml_free(h)
+  return out
+
+pub func load_version(project_root: ptr) -> ptr:
+  let h = parse_handle(project_root)
+  if (map.map_is_null_ptr(h) == 1):
+    return default_version()
+  let pkg = toml.toml_get_section(h, "package")
+  let out = toml.toml_get_str(pkg, "version")
+  if (map.map_is_null_ptr(out) == 1):
+    toml.toml_free(h)
+    return default_version()
+  if (utils.is_empty(out)):
+    toml.toml_free(h)
+    return default_version()
+  toml.toml_free(h)
+  return out
+
+pub func load_entry(project_root: ptr) -> ptr:
+  let h = parse_handle(project_root)
+  if (map.map_is_null_ptr(h) == 1):
+    return default_entry()
+  let pkg = toml.toml_get_section(h, "package")
+  let out = toml.toml_get_str(pkg, "entry")
+  if (map.map_is_null_ptr(out) == 1):
+    toml.toml_free(h)
+    return default_entry()
+  if (utils.is_empty(out)):
+    toml.toml_free(h)
+    return default_entry()
+  toml.toml_free(h)
+  return out
+
+pub func load_description(project_root: ptr) -> ptr:
+  let h = parse_handle(project_root)
+  if (map.map_is_null_ptr(h) == 1):
+    return default_description()
+  let pkg = toml.toml_get_section(h, "package")
+  let out = toml.toml_get_str(pkg, "description")
+  if (map.map_is_null_ptr(out) == 1):
+    toml.toml_free(h)
+    return default_description()
+  toml.toml_free(h)
+  return out
+
+pub func load_license(project_root: ptr) -> ptr:
+  let h = parse_handle(project_root)
+  if (map.map_is_null_ptr(h) == 1):
+    return default_license()
+  let pkg = toml.toml_get_section(h, "package")
+  let out = toml.toml_get_str(pkg, "license")
+  if (map.map_is_null_ptr(out) == 1):
+    toml.toml_free(h)
+    return default_license()
+  toml.toml_free(h)
+  return out
+
+pub func load_authors(project_root: ptr) -> ptr:
+  let h = parse_handle(project_root)
+  if (map.map_is_null_ptr(h) == 1):
+    return default_authors()
+  let pkg = toml.toml_get_section(h, "package")
+  let out = toml.toml_get_str(pkg, "authors")
+  if (map.map_is_null_ptr(out) == 1):
+    toml.toml_free(h)
+    return default_authors()
+  toml.toml_free(h)
+  return out
+
+pub func parse_dependencies(section: ptr) -> ptr:
+  let out = list.list_new()
+  if (map.map_is_null_ptr(section) == 1):
+    return out
+  let keys = toml.toml_get_keys(section)
+  if (map.map_is_null_ptr(keys) == 1):
+    return out
+  let i: i64 = 0
+  let n = list.list_count(keys)
+  while (i < n):
+    let key = list.list_get(keys, i)
+    let value = toml.toml_get_str(section, key)
+    if (map.map_is_null_ptr(value) == 1):
+      value = str.concat("", "")
+    let line = str.concat(str.concat(key, " = "), str.concat("\"", str.concat(value, "\"")))
+    list.list_append(out, line)
+    i = i + 1
+  return out
+
+pub func load_dependencies(project_root: ptr) -> ptr:
+  let h = parse_handle(project_root)
+  if (map.map_is_null_ptr(h) == 1):
+    return list.list_new()
+  let deps = toml.toml_get_section(h, "dependencies")
+  let out = parse_dependencies(deps)
+  toml.toml_free(h)
+  return out
+
+pub func to_toml(name: ptr, version: ptr, entry: ptr, description: ptr, license: ptr, authors: ptr, dependencies: ptr) -> ptr:
+  let out = str.concat("", "")
+  out = str.concat(out, "[package]\n")
+  out = str.concat(out, str.concat("name = \"", str.concat(name, "\"\n")))
+  out = str.concat(out, str.concat("version = \"", str.concat(version, "\"\n")))
+  out = str.concat(out, str.concat("entry = \"", str.concat(entry, "\"\n")))
+  out = str.concat(out, str.concat("description = \"", str.concat(description, "\"\n")))
+  out = str.concat(out, str.concat("license = \"", str.concat(license, "\"\n")))
+  out = str.concat(out, str.concat("authors = \"", str.concat(authors, "\"\n\n")))
+  out = str.concat(out, "[dependencies]\n")
+  let i: i64 = 0
+  let n = list.list_count(dependencies)
+  while (i < n):
+    out = str.concat(out, list.list_get(dependencies, i))
+    out = str.concat(out, "\n")
+    i = i + 1
+  return out
+
+pub func save(project_root: ptr, name: ptr, version: ptr, entry: ptr, description: ptr, license: ptr, authors: ptr, dependencies: ptr) -> i32:
+  let raw = to_toml(name, version, entry, description, license, authors, dependencies)
+  return fs.write_file(manifest_path(project_root), raw)
+
+pub func dependency_name(dep_line: ptr) -> ptr:
+  let parts = str.split(dep_line, "=")
+  if (map.map_is_null_ptr(parts) == 1):
+    return str.concat("", "")
+  let one: i64 = 1
+  if (list.list_count(parts) < one):
+    return str.concat("", "")
+  return str.trim(list.list_get(parts, 0))
+
+pub func dependency_spec(dep_line: ptr) -> ptr:
+  let parts = str.split(dep_line, "=")
+  if (map.map_is_null_ptr(parts) == 1):
+    return str.concat("", "")
+  let two: i64 = 2
+  if (list.list_count(parts) < two):
+    return str.concat("", "")
+  return str.trim(list.list_get(parts, 1))
+
+pub func add_dependency(project_root: ptr, dep_name: ptr, dep_spec: ptr) -> i32:
+  let name = load_name(project_root)
+  let version = load_version(project_root)
+  let entry = load_entry(project_root)
+  let description = load_description(project_root)
+  let license = load_license(project_root)
+  let authors = load_authors(project_root)
+  let dependencies = load_dependencies(project_root)
+
+  let out = list.list_new()
+  let i: i64 = 0
+  let n = list.list_count(dependencies)
+  let replaced = 0
+  while (i < n):
+    let line = list.list_get(dependencies, i)
+    if (str.str_eq(dependency_name(line), dep_name)):
+      list.list_append(out, str.concat(str.concat(dep_name, " = "), dep_spec))
+      replaced = 1
+    else:
+      list.list_append(out, line)
+    i = i + 1
+  if (replaced == 0):
+    list.list_append(out, str.concat(str.concat(dep_name, " = "), dep_spec))
+  return save(project_root, name, version, entry, description, license, authors, out)
+
+pub func remove_dependency(project_root: ptr, dep_name: ptr) -> i32:
+  let name = load_name(project_root)
+  let version = load_version(project_root)
+  let entry = load_entry(project_root)
+  let description = load_description(project_root)
+  let license = load_license(project_root)
+  let authors = load_authors(project_root)
+  let dependencies = load_dependencies(project_root)
+
+  let out = list.list_new()
+  let i: i64 = 0
+  let n = list.list_count(dependencies)
+  while (i < n):
+    let line = list.list_get(dependencies, i)
+    if (str.str_eq(dependency_name(line), dep_name)):
+      i = i + 1
+      continue
+    list.list_append(out, line)
+    i = i + 1
+  return save(project_root, name, version, entry, description, license, authors, out)

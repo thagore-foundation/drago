@@ -1,0 +1,7 @@
+import lib.fs as fs
+
+pub func join(a: ptr, b: ptr) -> ptr:
+  return fs.path_join(a, b)
+
+pub func cwd() -> ptr:
+  return fs.getcwd()

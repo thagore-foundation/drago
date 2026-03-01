@@ -1,0 +1,61 @@
+import lib.fs as fs
+import std.list as list
+import std.string as str
+import src.deps.cache as cache
+import src.project.lockfile as lockfile
+
+pub func detect_version_conflicts(project_root: ptr) -> i32:
+  let lines = lockfile.load_lines(project_root)
+  let i: i64 = 0
+  let n = list.list_count(lines)
+  while (i < n):
+    let p1_line = list.list_get(lines, i)
+    let p1_name = lockfile.pkg_name(p1_line)
+    let p1_version = lockfile.pkg_version(p1_line)
+    let j = i + 1
+    while (j < n):
+      let p2_line = list.list_get(lines, j)
+      let p2_name = lockfile.pkg_name(p2_line)
+      let p2_version = lockfile.pkg_version(p2_line)
+      if (str.str_eq(p1_name, p2_name)):
+        if (str.str_eq(p1_version, p2_version)):
+          j = j + 1
+          continue
+        else:
+          print(str.concat("ERROR: dependency version conflict for package ", p1_name))
+          print(str.concat("  versions: ", str.concat(p1_version, str.concat(" vs ", p2_version))))
+          return 0
+      j = j + 1
+    i = i + 1
+  return 1
+
+pub func resolve_sources(project_root: ptr) -> ptr:
+  let out = list.list_new()
+  let lines = lockfile.load_lines(project_root)
+  let i: i64 = 0
+  let n = list.list_count(lines)
+  while (i < n):
+    let line = list.list_get(lines, i)
+    let pkg_name = lockfile.pkg_name(line)
+    let pkg_version = lockfile.pkg_version(line)
+    let dir = cache.package_dir(pkg_name, pkg_version)
+    if (fs.exists(dir) == 0):
+      print(str.concat("ERROR: package not installed in cache: ", str.concat(pkg_name, str.concat("@", pkg_version))))
+      return out
+    list.list_append(out, dir)
+    i = i + 1
+  return out
+
+pub func compile_cache_hit(project_root: ptr, target: ptr, thagc_version: ptr, flags: ptr) -> i32:
+  let lines = lockfile.load_lines(project_root)
+  let i: i64 = 0
+  let n = list.list_count(lines)
+  while (i < n):
+    let line = list.list_get(lines, i)
+    let pkg_name = lockfile.pkg_name(line)
+    let pkg_version = lockfile.pkg_version(line)
+    let pkg_checksum = lockfile.pkg_checksum(line)
+    if (cache.meta_valid(pkg_name, pkg_version, target, thagc_version, pkg_checksum, flags) == 0):
+      return 0
+    i = i + 1
+  return 1

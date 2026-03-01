@@ -1,0 +1,37 @@
+import lib.fs as fs
+import lib.path as path
+import lib.process as process
+import std.string as str
+import src.project.manifest as manifest
+
+pub func thagc_bin() -> ptr:
+  let bin = process.env("THAGC")
+  if (str.str_eq(bin, "")):
+    return str.concat("", "thagc")
+  return bin
+
+pub func ensure_target_dir(project_root: ptr) -> i32:
+  let t = path.join(project_root, "target")
+  return fs.mkdir(t)
+
+pub func output_binary_path(project_root: ptr, project_name: ptr) -> ptr:
+  let name = str.concat(project_name, ".bin")
+  return path.join(path.join(project_root, "target"), name)
+
+pub func link_project(project_root: ptr, target_triple: ptr) -> i32:
+  let name = manifest.load_name(project_root)
+  let entry_rel = manifest.load_entry(project_root)
+  if (ensure_target_dir(project_root) == 0):
+    print("ERROR: cannot create target directory")
+    return 0
+  let out = output_binary_path(project_root, name)
+  let entry = path.join(project_root, entry_rel)
+  let cmd = str.concat(thagc_bin(), str.concat(" build ", str.concat(entry, str.concat(" -o ", out))))
+  if (str.str_eq(target_triple, "")):
+    cmd = cmd
+  else:
+    cmd = str.concat(cmd, str.concat(" --target=", target_triple))
+  if (process.run(cmd) != 0):
+    print("ERROR: thagc link/build failed")
+    return 0
+  return 1

@@ -1,0 +1,29 @@
+# Deterministic map entry points mapped to runtime hooks.
+
+extern func thag_map_new() -> ptr
+extern func thag_map_put(map: ptr, key: ptr, value: ptr) -> i32
+extern func thag_map_get(map: ptr, key: ptr) -> ptr
+extern func thag_map_is_null_ptr(value: ptr) -> i32
+extern func thag_map_free(map: ptr) -> void
+
+pub func map_new() -> ptr:
+  return thag_map_new()
+
+pub func map_put(map: ptr, key: ptr, value: ptr) -> i32:
+  return thag_map_put(map, key, value)
+
+pub func map_get(map: ptr, key: ptr) -> ptr:
+  return thag_map_get(map, key)
+
+pub func map_is_null_ptr(value: ptr) -> i32:
+  return thag_map_is_null_ptr(value)
+
+pub func map_is_null(value: ptr) -> bool:
+  let rc = thag_map_is_null_ptr(value)
+  let zero = rc - rc
+  if (rc == zero):
+    return false
+  return true
+
+pub func map_free(map: ptr) -> void:
+  thag_map_free(map)

@@ -1,0 +1,63 @@
+import lib.fs as fs
+import lib.map as map
+import lib.path as path
+import lib.process as process
+import std.list as list
+import std.string as str
+import src.core.utils as utils
+import src.build.linker as linker
+
+pub func is_test_file(name: ptr) -> i32:
+  if (utils.utils_contains(name, "test")):
+    if (utils.ends_with(name, ".tg")):
+      return 1
+  return 0
+
+pub func discover_tests(project_root: ptr) -> ptr:
+  let out = list.list_new()
+  let tests_dir = path.join(project_root, "tests")
+  if (fs.exists(tests_dir) == 0):
+    return out
+  let files = fs.readdir(tests_dir)
+  if (map.map_is_null_ptr(files) == 1):
+    return out
+  let i: i64 = 0
+  let n = list.list_count(files)
+  while (i < n):
+    let name = list.list_get(files, i)
+    if (is_test_file(name) != 0):
+      list.list_append(out, path.join(tests_dir, name))
+    i = i + 1
+  return out
+
+pub func run_tests(project_root: ptr, quiet: i32) -> i32:
+  let tests = discover_tests(project_root)
+  let n = list.list_count(tests)
+  if (n == 0):
+    print("no tests found")
+    return 1
+
+  let i: i64 = 0
+  let ok = 1
+  while (i < n):
+    let test_file = list.list_get(tests, i)
+    let out_bin = path.join(path.join(project_root, "target"), str.concat("test_", str.concat(str.from_int(i), ".bin")))
+    let cmd_build = str.concat(linker.thagc_bin(), str.concat(" build ", str.concat(test_file, str.concat(" -o ", out_bin))))
+    let start = process.capture("date +%s%3N")
+    if (process.run(cmd_build) != 0):
+      print(str.concat("✗ fail ", test_file))
+      ok = 0
+      i = i + 1
+      continue
+    let run_rc = process.run(str.concat("\"", str.concat(out_bin, "\"")))
+    let end = process.capture("date +%s%3N")
+    let elapsed = str.to_int(str.trim(end)) - str.to_int(str.trim(start))
+    if (run_rc == 0):
+      if (quiet == 0):
+        print(str.concat("✓ pass ", str.concat(test_file, str.concat(" (", str.concat(str.from_int(elapsed), "ms)")))))
+    else:
+      print(str.concat("✗ fail ", str.concat(test_file, str.concat(" (exit=", str.concat(str.from_int(run_rc), ")")))))
+      print(str.concat("  at: ", test_file))
+      ok = 0
+    i = i + 1
+  return ok

@@ -1,0 +1,22 @@
+# Core std helpers.
+
+extern func thag_process_exit(code: i32) -> void
+
+pub func ok(val: i32):
+  return Ok(val)
+
+pub func fail(msg: ptr):
+  return Err(msg)
+
+pub func assert(cond: bool, msg: ptr):
+  if (cond):
+    return 1
+  print(msg)
+  thag_process_exit(1)
+  return 0
+
+pub func rc_new(val: i32):
+  return Rc(val)
+
+pub func arc_new(val: i32):
+  return Arc(val)

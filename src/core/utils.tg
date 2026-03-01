@@ -1,0 +1,52 @@
+import std.string as str
+
+pub func is_empty(s: ptr) -> bool:
+  let value = str.concat("", s)
+  let zero: i64 = 0
+  return str.slen(str.trim(value)) == zero
+
+pub func utils_starts_with(text: ptr, prefix: ptr) -> bool:
+  let h = str.concat("", text)
+  let p = str.concat("", prefix)
+  let n = str.slen(p)
+  if (str.slen(h) < n):
+    return false
+  let left = str.substr(h, 0, n)
+  let eq = str.str_eq(left, p)
+  if (eq):
+    return true
+  return false
+
+pub func ends_with(text: ptr, suffix: ptr) -> bool:
+  let h = str.concat("", text)
+  let s = str.concat("", suffix)
+  let n = str.slen(s)
+  let m = str.slen(h)
+  if (m < n):
+    return false
+  let right = str.substr(h, m - n, n)
+  let eq = str.str_eq(right, s)
+  if (eq):
+    return true
+  return false
+
+pub func strip_quotes(text: ptr) -> ptr:
+  return str.trim(str.concat("", text))
+
+pub func utils_contains(text: ptr, part: ptr) -> bool:
+  let rc = str.str_has(str.concat("", text), str.concat("", part))
+  if (rc):
+    return true
+  return false
+
+pub func is_zero(v: i64) -> bool:
+  let zero = v - v
+  if (v == zero):
+    return true
+  return false
+
+pub func non_zero(v: i64) -> bool:
+  let zero = v - v
+  if (v == zero):
+    return false
+  return true

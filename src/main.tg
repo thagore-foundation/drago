@@ -1,0 +1,239 @@
+import lib.fs as fs
+import lib.path as path
+import lib.process as process
+import std.list as list
+import std.string as str
+import src.build.compiler as compiler
+import src.build.linker as linker
+import src.build.runner as runner
+import src.cli.output as out
+import src.cli.parser as parser
+import src.core.utils as utils
+import src.deps.cache as cache
+import src.deps.registry as registry
+import src.deps.resolver as resolver
+import src.project.lockfile as lockfile
+import src.project.manifest as manifest
+import src.project.scaffold as scaffold
+import src.test.runner as test_runner
+
+func usage():
+  print("drago <command> [args] [--quiet] [--verbose]")
+  print("commands:")
+  print("  new <name>")
+  print("  build")
+  print("  run")
+  print("  test")
+  print("  add <package> [version]")
+  print("  remove <package>")
+  print("  install")
+  print("  update")
+  print("  publish")
+  print("  fmt")
+  print("  check")
+  print("  cache <list|size|clean|purge|purge-unused>")
+  print("  audit")
+
+func project_root() -> ptr:
+  return fs.getcwd()
+
+func project_name(root: ptr) -> ptr:
+  return manifest.load_name(root)
+
+func handle_cache(sub: ptr, quiet: i32) -> bool:
+  let init_rc = cache.ensure_layout()
+  if (init_rc == 0):
+    out.print_error("cannot initialize cache layout")
+    return false
+  if (str.str_eq(sub, "list")):
+    let pkgs = cache.list_packages()
+    let i: i64 = 0
+    let n = list.list_count(pkgs)
+    while (i < n):
+      print(list.list_get(pkgs, i))
+      i = i + 1
+    return true
+  if (str.str_eq(sub, "size")):
+    print(str.concat("cache size bytes: ", str.from_int(cache.cache_size_bytes())))
+    return true
+  if (str.str_eq(sub, "clean")):
+    return cache.clean_compiled() != 0
+  if (str.str_eq(sub, "purge")):
+    return cache.purge_all() != 0
+  if (str.str_eq(sub, "purge-unused")):
+    return cache.purge_unused() != 0
+  out.print_error("cache subcommand required: list|size|clean|purge|purge-unused")
+  return false
+
+func handle_build(root: ptr, quiet: i32) -> bool:
+  out.print_header(str.concat("Building ", project_name(root)), quiet)
+  let conflict_rc = resolver.detect_version_conflicts(root)
+  if (conflict_rc == 0):
+    return false
+  let build_rc = compiler.build_project(root, quiet)
+  if (build_rc == 0):
+    return false
+  let bin = linker.output_binary_path(root, project_name(root))
+  out.print_success(str.concat("Built -> ", bin), quiet)
+  return true
+
+func handle_run(root: ptr, quiet: i32) -> bool:
+  let build_ok = handle_build(root, quiet)
+  if (build_ok == false):
+    return false
+  out.print_separator(quiet)
+  out.print_step("Running", quiet)
+  let bin = linker.output_binary_path(root, project_name(root))
+  let rc = runner.run_binary(bin)
+  if (rc == 0):
+    return true
+  return false
+
+func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32) -> bool:
+  if (utils.is_empty(pkg)):
+    out.print_error("add requires package name")
+    return false
+  out.print_header(str.concat("Adding ", pkg), quiet)
+  let wanted = version
+  if (utils.is_empty(wanted)):
+    wanted = str.concat("", "")
+  let add_rc = registry.reg_add_dependency(root, pkg, wanted)
+  if (add_rc == 0):
+    return false
+  out.print_success("Updated drago.toml and drago.lock", quiet)
+  return true
+
+func handle_remove(root: ptr, pkg: ptr, quiet: i32) -> bool:
+  if (utils.is_empty(pkg)):
+    out.print_error("remove requires package name")
+    return false
+  let manifest_rc = manifest.remove_dependency(root, pkg)
+  if (manifest_rc == 0):
+    return false
+  let lock_rc = lockfile.lock_remove(root, pkg)
+  if (lock_rc == 0):
+    return false
+  out.print_success(str.concat("Removed ", pkg), quiet)
+  return true
+
+func handle_install(root: ptr, quiet: i32) -> bool:
+  out.print_header("Installing dependencies", quiet)
+  let install_rc = registry.reg_install_all(root)
+  if (install_rc == 0):
+    return false
+  out.print_success("Dependencies installed", quiet)
+  return true
+
+func handle_update(root: ptr, quiet: i32) -> bool:
+  out.print_header("Updating dependencies", quiet)
+  let update_rc = registry.reg_update_all(root)
+  if (update_rc == 0):
+    return false
+  out.print_success("Dependencies updated", quiet)
+  return true
+
+func handle_fmt(root: ptr, quiet: i32) -> bool:
+  let cmd = str.concat(linker.thagc_bin(), str.concat(" fix doctor ", path.join(root, "src/main.tg")))
+  let rc = process.run(cmd)
+  if (rc != 0):
+    out.print_error("fmt/check pipeline failed (using thagc fix doctor fallback)")
+    return false
+  out.print_success("Format check completed", quiet)
+  return true
+
+func handle_check(root: ptr, quiet: i32) -> bool:
+  let entry = path.join(root, manifest.load_entry(root))
+  let cmd = str.concat(linker.thagc_bin(), str.concat(" build ", str.concat(entry, " --emit-llvm -o target/check.bin")))
+  let rc = process.run(cmd)
+  if (rc != 0):
+    out.print_error("check failed")
+    return false
+  out.print_success("Typecheck/build check passed", quiet)
+  return true
+
+func handle_publish(root: ptr, quiet: i32) -> bool:
+  out.print_header("Publishing package metadata", quiet)
+  return registry.reg_publish_project(root) != 0
+
+func handle_audit(root: ptr, quiet: i32) -> bool:
+  out.print_header("Auditing dependencies", quiet)
+  let ok = registry.reg_audit_dependencies(root)
+  if (ok != 0):
+    out.print_success("No known issues found", quiet)
+  else:
+    out.print_warning("Known issues detected", quiet)
+  return true
+
+func main() -> i32:
+  let parsed = parser.parse()
+  let cmd = parser.parsed_kind(parsed)
+  let arg1 = parser.parsed_arg1(parsed)
+  let arg2 = parser.parsed_arg2(parsed)
+  let quiet = parser.parsed_quiet(parsed)
+  let verbose = parser.parsed_verbose(parsed)
+  let root = project_root()
+  if (verbose != 0):
+    print(str.concat("drago root: ", root))
+
+  if (str.str_eq(cmd, "help")):
+    usage()
+    return 0
+  if (str.str_eq(cmd, "version")):
+    print("drago 0.1.0")
+    return 0
+  if (str.str_eq(cmd, "new")):
+    if (scaffold.create_project(arg1) != 0):
+      out.print_success(str.concat("Created project ", arg1), quiet)
+      return 0
+    return 1
+  if (str.str_eq(cmd, "build")):
+    if (handle_build(root, quiet)):
+      return 0
+    return 1
+  if (str.str_eq(cmd, "run")):
+    if (handle_run(root, quiet)):
+      return 0
+    return 1
+  if (str.str_eq(cmd, "test")):
+    if (test_runner.run_tests(root, quiet) != 0):
+      return 0
+    return 1
+  if (str.str_eq(cmd, "add")):
+    if (handle_add(root, arg1, arg2, quiet)):
+      return 0
+    return 1
+  if (str.str_eq(cmd, "remove")):
+    if (handle_remove(root, arg1, quiet)):
+      return 0
+    return 1
+  if (str.str_eq(cmd, "install")):
+    if (handle_install(root, quiet)):
+      return 0
+    return 1
+  if (str.str_eq(cmd, "update")):
+    if (handle_update(root, quiet)):
+      return 0
+    return 1
+  if (str.str_eq(cmd, "publish")):
+    if (handle_publish(root, quiet)):
+      return 0
+    return 1
+  if (str.str_eq(cmd, "fmt")):
+    if (handle_fmt(root, quiet)):
+      return 0
+    return 1
+  if (str.str_eq(cmd, "check")):
+    if (handle_check(root, quiet)):
+      return 0
+    return 1
+  if (str.str_eq(cmd, "cache")):
+    if (handle_cache(arg1, quiet)):
+      return 0
+    return 1
+  if (str.str_eq(cmd, "audit")):
+    if (handle_audit(root, quiet)):
+      return 0
+    return 1
+
+  usage()
+  return 1

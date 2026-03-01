@@ -1,0 +1,46 @@
+import lib.fs as fs
+import lib.path as path
+import std.string as str
+import src.core.utils as utils
+
+pub func create_project(name: ptr) -> i32:
+  if (utils.is_empty(name)):
+    print("ERROR: project name is required")
+    return 0
+
+  if (fs.exists(name) != 0):
+    print(str.concat("ERROR: directory already exists: ", name))
+    return 0
+
+  if (fs.mkdir(name) == 0):
+    print("ERROR: cannot create project directory")
+    return 0
+
+  let src_dir = path.join(name, "src")
+  let tests_dir = path.join(name, "tests")
+  if (fs.mkdir(src_dir) == 0):
+    print("ERROR: cannot create src/")
+    return 0
+  if (fs.mkdir(tests_dir) == 0):
+    print("ERROR: cannot create tests/")
+    return 0
+
+  let manifest_path = path.join(name, "drago.toml")
+  let manifest = str.concat("[package]\nname = \"", str.concat(name, "\"\nversion = \"0.1.0\"\nentry = \"src/main.tg\"\ndescription = \"\"\nlicense = \"MIT\"\nauthors = \"\"\n\n[dependencies]\n"))
+  if (fs.write_file(manifest_path, manifest) == 0):
+    print("ERROR: cannot write drago.toml")
+    return 0
+
+  let main_path = path.join(src_dir, "main.tg")
+  let main_src = "func main() -> i32:\n  print(\"Hello from Drago project\")\n  return 0\n"
+  if (fs.write_file(main_path, main_src) == 0):
+    print("ERROR: cannot write src/main.tg")
+    return 0
+
+  let test_path = path.join(tests_dir, "sample_test.tg")
+  let test_src = "func main() -> i32:\n  return 0\n"
+  if (fs.write_file(test_path, test_src) == 0):
+    print("ERROR: cannot write tests/sample_test.tg")
+    return 0
+
+  return 1

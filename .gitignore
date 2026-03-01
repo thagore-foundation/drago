@@ -1,0 +1,7 @@
+drago.bin
+drago.bin.o
+*.o
+target/
+.thagore/
+*.log
+*.tmp

@@ -1,0 +1,142 @@
+import lib.fs as fs
+import lib.map as map
+import lib.path as path
+import lib.process as process
+import std.list as list
+import std.string as str
+import src.core.utils as utils
+
+pub func home_dir() -> ptr:
+  let h = process.env("HOME")
+  if (utils.is_empty(h)):
+    return str.concat("", ".")
+  return h
+
+pub func thagore_root() -> ptr:
+  return path.join(home_dir(), ".thagore")
+
+pub func cache_root() -> ptr:
+  return path.join(thagore_root(), "cache")
+
+pub func packages_root() -> ptr:
+  return path.join(thagore_root(), "packages")
+
+pub func compiled_root() -> ptr:
+  return path.join(thagore_root(), "compiled")
+
+pub func ensure_layout() -> i32:
+  let mk_root = fs.mkdir(thagore_root())
+  if (mk_root == 0):
+    return 0
+  let mk_cache = fs.mkdir(cache_root())
+  if (mk_cache == 0):
+    return 0
+  let mk_packages = fs.mkdir(packages_root())
+  if (mk_packages == 0):
+    return 0
+  let mk_compiled = fs.mkdir(compiled_root())
+  if (mk_compiled == 0):
+    return 0
+  return 1
+
+pub func package_dir(name: ptr, version: ptr) -> ptr:
+  return path.join(path.join(packages_root(), name), version)
+
+pub func compiled_target_dir(name: ptr, version: ptr, target: ptr) -> ptr:
+  return path.join(path.join(path.join(compiled_root(), name), version), target)
+
+pub func compiled_meta_path(name: ptr, version: ptr, target: ptr) -> ptr:
+  return path.join(compiled_target_dir(name, version, target), "meta.json")
+
+pub func has_package(name: ptr, version: ptr) -> i32:
+  return fs.exists(package_dir(name, version))
+
+pub func write_meta(name: ptr, version: ptr, target: ptr, thagc_version: ptr, checksum: ptr, flags: ptr) -> i32:
+  let dir = compiled_target_dir(name, version, target)
+  let mk_dir = fs.mkdir(dir)
+  if (mk_dir == 0):
+    return 0
+  let body = str.concat("", "{\n  \"thagc_version\": \"")
+  body = str.concat(body, thagc_version)
+  body = str.concat(body, "\",\n  \"target\": \"")
+  body = str.concat(body, target)
+  body = str.concat(body, "\",\n  \"source_checksum\": \"")
+  body = str.concat(body, checksum)
+  body = str.concat(body, "\",\n  \"flags\": \"")
+  body = str.concat(body, flags)
+  body = str.concat(body, "\"\n}\n")
+  return fs.write_file(compiled_meta_path(name, version, target), body)
+
+pub func meta_valid(name: ptr, version: ptr, target: ptr, thagc_version: ptr, checksum: ptr, flags: ptr) -> i32:
+  let p = compiled_meta_path(name, version, target)
+  let exists_p = fs.exists(p)
+  if (exists_p == 0):
+    return 0
+  let body = fs.read_file(p)
+  if (map.map_is_null_ptr(body) == 1):
+    return 0
+  if (str.str_has(body, thagc_version)):
+    body = body
+  else:
+    return 0
+  if (str.str_has(body, target)):
+    body = body
+  else:
+    return 0
+  if (str.str_has(body, checksum)):
+    body = body
+  else:
+    return 0
+  if (str.str_has(body, flags)):
+    body = body
+  else:
+    return 0
+  return 1
+
+pub func list_packages() -> ptr:
+  ensure_layout()
+  let names = fs.readdir(packages_root())
+  if (map.map_is_null_ptr(names) == 1):
+    return str.split("", "\n")
+  return names
+
+pub func cache_size_bytes() -> i64:
+  let zero: i64 = 0
+  let layout_ok = ensure_layout()
+  if (layout_ok == 0):
+    return zero
+  let files = fs.readdir(cache_root())
+  if (map.map_is_null_ptr(files) == 1):
+    return zero
+  let i: i64 = 0
+  let n = list.list_count(files)
+  let total: i64 = zero
+  while (i < n):
+    let f = list.list_get(files, i)
+    let p = path.join(cache_root(), f)
+    let s = fs.filesize(p)
+    if (s > 0):
+      total = total + s
+    i = i + 1
+  return total
+
+pub func clean_compiled() -> i32:
+  let has_compiled = fs.exists(compiled_root())
+  if (has_compiled != 0):
+    fs.remove_path(compiled_root())
+  return fs.mkdir(compiled_root())
+
+pub func purge_all() -> i32:
+  let has_cache = fs.exists(cache_root())
+  if (has_cache != 0):
+    fs.remove_path(cache_root())
+  let has_packages = fs.exists(packages_root())
+  if (has_packages != 0):
+    fs.remove_path(packages_root())
+  let has_compiled = fs.exists(compiled_root())
+  if (has_compiled != 0):
+    fs.remove_path(compiled_root())
+  return ensure_layout()
+
+pub func purge_unused() -> i32:
+  return clean_compiled()

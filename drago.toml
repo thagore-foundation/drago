@@ -1,0 +1,9 @@
+[package]
+name = "drago"
+version = "0.1.0"
+entry = "src/main.tg"
+description = "Drago package manager for Thagore"
+license = "Apache-2.0"
+authors = ["Le Hung Quang Minh <lehungquangminh@users.noreply.github.com>"]
+
+[dependencies]
