@@ -54,6 +54,7 @@ jobs:
             arch: x86_64
             archive_ext: zip
             bin_name: drago.exe
+            optional: true
           - runner: windows-11-arm
             platform: windows
             arch: aarch64

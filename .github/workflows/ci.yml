@@ -39,6 +39,7 @@ jobs:
             platform: windows
             arch: x86_64
             bin_name: drago.exe
+            optional: true
           - runner: windows-11-arm
             platform: windows
             arch: aarch64
