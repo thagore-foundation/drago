@@ -99,7 +99,7 @@ func handle_build(root: ptr, quiet: i32) -> bool:
   let version = project_version(root)
   out.print_action("🔨", str.concat("Building ", str.concat(name, str.concat(" v", version))), quiet)
   let started = time.now_ms()
-  out.print_progress("src/main.tg", "compiling...", quiet)
+  out.print_progress_start("src/main.tg", "compiling...", quiet)
   let conflict_rc = resolver.detect_version_conflicts(root)
   if (conflict_rc == 0):
     out.print_summary_fail("Build failed")
@@ -110,9 +110,9 @@ func handle_build(root: ptr, quiet: i32) -> bool:
   let elapsed = time.now_ms() - started
   let bin = linker.output_binary_path(root, name)
   let size = fs.filesize(bin)
-  out.print_done("src/main.tg", out.format_ms(elapsed), quiet)
-  out.print_progress("linking...", "", quiet)
-  out.print_done("linked", "", quiet)
+  out.print_progress_finish("src/main.tg", out.format_ms(elapsed), quiet)
+  out.print_progress_start("linking...", "", quiet)
+  out.print_progress_finish("linked", "", quiet)
   print("")
   let rel_bin = str.concat("target/", str.concat(name, ".bin"))
   let tail = str.concat(" (", str.concat(out.format_bytes(size), str.concat(", ", str.concat(out.format_seconds_tenth(elapsed), ")"))))

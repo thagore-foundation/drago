@@ -52,6 +52,37 @@ func color_enabled() -> bool:
 
   return true
 
+func can_rewrite_progress_line() -> bool:
+  let mode = env_value("DRAGO_PROGRESS")
+  if (str.str_eq(mode, "never")):
+    return false
+  if (str.str_eq(mode, "always")):
+    return true
+
+  let color_mode = env_value("DRAGO_COLOR")
+  if (str.str_eq(color_mode, "never")):
+    return false
+  if (str.str_eq(color_mode, "always")):
+    return true
+
+  let term = env_value("TERM")
+  if (str.str_eq(term, "") == false):
+    if (str.str_eq(term, "dumb") == false):
+      return true
+
+  let os_name = env_value("OS")
+  if (str.str_eq(os_name, "Windows_NT")):
+    let wt = env_value("WT_SESSION")
+    let ansicon = env_value("ANSICON")
+    let conemu = env_value("ConEmuANSI")
+    if (str.str_eq(wt, "") == false):
+      return true
+    if (str.str_eq(ansicon, "") == false):
+      return true
+    if (str.str_eq(conemu, "ON")):
+      return true
+  return false
+
 func style(code: ptr, text: ptr) -> ptr:
   if (color_enabled() == false):
     return text
@@ -126,24 +157,40 @@ pub func print_action(icon: ptr, title: ptr, quiet: i32):
   return 1
 
 pub func print_progress(name: ptr, detail: ptr, quiet: i32):
+  return print_progress_start(name, detail, quiet)
+
+func render_progress_text(name: ptr, detail: ptr) -> ptr:
+  if (str.str_eq(detail, "")):
+    return str.concat("  ○ ", name)
+  return str.concat("  ○ ", str.concat(name, str.concat(" ", detail)))
+
+func render_done_text(name: ptr, detail: ptr) -> ptr:
+  if (str.str_eq(name, "")):
+    return str.concat("  ✓ ", detail)
+  if (str.str_eq(detail, "")):
+    return str.concat("  ✓ ", name)
+  return str.concat("  ✓ ", str.concat(name, str.concat(" ", detail)))
+
+pub func print_progress_start(name: ptr, detail: ptr, quiet: i32):
   if (quiet != 0):
     return 0
-  if (str.str_eq(detail, "")):
-    print(style("1;34", str.concat("  ○ ", name)))
+  print(style("1;34", render_progress_text(name, detail)))
+  return 1
+
+pub func print_progress_finish(name: ptr, detail: ptr, quiet: i32):
+  if (quiet != 0):
+    return 0
+  let done_line = style("1;32", render_done_text(name, detail))
+  if (can_rewrite_progress_line()):
+    print(str.concat("\x1b[1A\x1b[2K\r", done_line))
     return 1
-  print(style("1;34", str.concat("  ○ ", str.concat(name, str.concat(" ", detail)))))
+  print(done_line)
   return 1
 
 pub func print_done(name: ptr, detail: ptr, quiet: i32):
   if (quiet != 0):
     return 0
-  if (str.str_eq(name, "")):
-    print(style("1;32", str.concat("  ✓ ", detail)))
-    return 1
-  if (str.str_eq(detail, "")):
-    print(style("1;32", str.concat("  ✓ ", name)))
-    return 1
-  print(style("1;32", str.concat("  ✓ ", str.concat(name, str.concat(" ", detail)))))
+  print(style("1;32", render_done_text(name, detail)))
   return 1
 
 pub func print_warning(msg: ptr, quiet: i32):
