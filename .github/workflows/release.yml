@@ -181,7 +181,8 @@ jobs:
             --link-lib=shell32 `
             --link-lib=ws2_32 `
             --link-lib=iphlpapi `
-            --link-lib=bcrypt
+            --link-lib=bcrypt `
+            --link-lib=legacy_stdio_definitions
         shell: pwsh
 
       - name: Package artifact (POSIX)
