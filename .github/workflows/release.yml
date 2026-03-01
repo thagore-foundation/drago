@@ -171,7 +171,15 @@ jobs:
 
       - name: Build binary (POSIX)
         if: runner.os != 'Windows'
-        run: thagc build src/main.tg -o "${{ matrix.bin_name }}" --link-lib=sqlite3
+        run: |
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            thagc build src/main.tg -o "${{ matrix.bin_name }}" \
+              --link-lib=sqlite3 \
+              --link-lib=c++ \
+              --link-lib=c++abi
+          else
+            thagc build src/main.tg -o "${{ matrix.bin_name }}" --link-lib=sqlite3
+          fi
         shell: bash
 
       - name: Build binary (Windows)
