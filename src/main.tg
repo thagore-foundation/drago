@@ -114,6 +114,16 @@ func selected_member_roots(root: ptr, quiet: i32, package_name: ptr) -> ptr:
   out.print_error(str.concat("package not found in workspace: ", package_name))
   return filtered
 
+func selected_single_member_root(root: ptr, quiet: i32, package_name: ptr, action: ptr) -> ptr:
+  let members = selected_member_roots(root, quiet, package_name)
+  let n = list.list_count(members)
+  if (n == 0):
+    return str.concat("", "")
+  if (n > 1):
+    out.print_error(str.concat(action, " matches multiple packages; choose one with --package"))
+    return str.concat("", "")
+  return list.list_get(members, 0)
+
 func dep_version_text(dep_line: ptr) -> ptr:
   let spec = manifest.dependency_spec(dep_line)
   let out = str.trim(spec)
@@ -166,6 +176,28 @@ func lock_consistent_for_member(member_root: ptr, features: ptr, all_features: i
       continue
     if (str.str_eq(dep_ver, locked_ver) == false):
       out.print_warning(str.concat(project_name(member_root), str.concat(": lock mismatch for ", str.concat(dep_name, str.concat(" (manifest ", str.concat(dep_ver, str.concat(", lock ", str.concat(locked_ver, ")"))))))), quiet)
+      ok = 0
+    i = i + 1
+  i = 0
+  n = list.list_count(lock_lines)
+  while (i < n):
+    let lock_line = list.list_get(lock_lines, i)
+    let lock_name = lockfile.pkg_name(lock_line)
+    if (utils.is_empty(lock_name)):
+      i = i + 1
+      continue
+    let found = 0
+    let j: i64 = 0
+    let m = list.list_count(deps)
+    while (j < m):
+      let dep_line = list.list_get(deps, j)
+      if (str.str_eq(manifest.dependency_name(dep_line), lock_name)):
+        found = 1
+        j = m
+      else:
+        j = j + 1
+    if (found == 0):
+      out.print_warning(str.concat(project_name(member_root), str.concat(": unexpected lock entry -> ", lock_name)), quiet)
       ok = 0
     i = i + 1
   return ok
@@ -551,9 +583,12 @@ func handle_run(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_fea
     return true
   return false
 
-func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32, offline: i32) -> bool:
+func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32, package_name: ptr, offline: i32) -> bool:
   if (utils.is_empty(pkg)):
     out.print_error("add requires package name")
+    return false
+  let target_root = selected_single_member_root(root, quiet, package_name, "add")
+  if (utils.is_empty(target_root)):
     return false
   let wanted = version
   let title = pkg
@@ -579,7 +614,7 @@ func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32, offline: i32) -> 
   if (utils.is_empty(wanted)):
     wanted = str.concat("", "")
   let started = time.now_ms()
-  let add_rc = registry.reg_add_dependency(root, pkg, wanted, offline)
+  let add_rc = registry.reg_add_dependency(target_root, pkg, wanted, offline)
   if (add_rc == 0):
     out.print_summary_fail("Add failed")
     return false
@@ -593,14 +628,17 @@ func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32, offline: i32) -> 
   out.print_summary_ok(str.concat("Added ", str.concat(title, str.concat(" ", out.format_ms(elapsed)))), quiet)
   return true
 
-func handle_remove(root: ptr, pkg: ptr, quiet: i32) -> bool:
+func handle_remove(root: ptr, pkg: ptr, quiet: i32, package_name: ptr) -> bool:
   if (utils.is_empty(pkg)):
     out.print_error("remove requires package name")
     return false
-  let manifest_rc = manifest.remove_dependency(root, pkg)
+  let target_root = selected_single_member_root(root, quiet, package_name, "remove")
+  if (utils.is_empty(target_root)):
+    return false
+  let manifest_rc = manifest.remove_dependency(target_root, pkg)
   if (manifest_rc == 0):
     return false
-  let lock_rc = lockfile.lock_remove(root, pkg)
+  let lock_rc = lockfile.lock_remove(target_root, pkg)
   if (lock_rc == 0):
     return false
   out.print_success(str.concat("Removed ", pkg), quiet)
@@ -786,11 +824,11 @@ func main() -> i32:
       return 0
     return 1
   if (str.str_eq(cmd, "add")):
-    if (handle_add(root, arg1, arg2, quiet, offline)):
+    if (handle_add(root, arg1, arg2, quiet, package_name, offline)):
       return 0
     return 1
   if (str.str_eq(cmd, "remove")):
-    if (handle_remove(root, arg1, quiet)):
+    if (handle_remove(root, arg1, quiet, package_name)):
       return 0
     return 1
   if (str.str_eq(cmd, "install")):
