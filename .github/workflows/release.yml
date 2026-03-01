@@ -171,10 +171,10 @@ jobs:
           $targetTriple = if ("${{ matrix.arch }}" -eq "aarch64") { "aarch64-pc-windows-msvc" } else { "x86_64-pc-windows-msvc" }
           thagc build src/main.tg -o "${{ matrix.bin_name }}" `
             --target $targetTriple `
-            --link-lib=msvcprt `
-            --link-lib=ucrt `
-            --link-lib=vcruntime `
-            --link-lib=msvcrt `
+            --link-lib=msvcprtd `
+            --link-lib=ucrtd `
+            --link-lib=vcruntimed `
+            --link-lib=msvcrtd `
             --link-lib=kernel32 `
             --link-lib=user32 `
             --link-lib=advapi32 `
