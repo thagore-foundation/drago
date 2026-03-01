@@ -575,13 +575,14 @@ func handle_toolchain_update(target: ptr, quiet: i32, offline: i32) -> bool:
   let cmd = str.concat("", "")
   if (str.str_eq(os_name, "Windows_NT")):
     let url_ps = str.concat("https:", str.concat("/", "/raw.githubusercontent.com/thagore-foundation/thagore/main/tooling/release/thagup.ps1"))
-    cmd = str.concat("powershell -NoProfile -ExecutionPolicy Bypass -Command \"$u='", str.concat(url_ps, "';$t=Join-Path $env:TEMP 'thagup.ps1';Invoke-WebRequest -Uri $u -OutFile $t;& powershell -NoProfile -ExecutionPolicy Bypass -File $t"))
+    cmd = str.concat("powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='Stop';$u='", str.concat(url_ps, "';$t=Join-Path $env:TEMP 'thagup.ps1';Invoke-WebRequest -Uri $u -OutFile $t;& powershell -NoProfile -ExecutionPolicy Bypass -File $t"))
     cmd = str.concat(cmd, thagup_windows_args_for_target(target_text))
     cmd = str.concat(cmd, "\"")
   else:
     let url = str.concat("https:", str.concat("/", "/raw.githubusercontent.com/thagore-foundation/thagore/main/tooling/release/thagup.sh"))
-    cmd = str.concat("curl -fsSL \"", str.concat(url, "\" | bash -s --"))
+    cmd = str.concat("tmp=\"$(mktemp)\" || exit 1; curl -fsSL \"", str.concat(url, "\" -o \"$tmp\" || { rm -f \"$tmp\"; exit 1; }; bash \"$tmp\""))
     cmd = str.concat(cmd, thagup_posix_args_for_target(target_text))
+    cmd = str.concat(cmd, "; rc=$?; rm -f \"$tmp\"; exit $rc")
   let rc = process.run(cmd)
   if (rc != 0):
     out.print_summary_fail("Self-update failed")
