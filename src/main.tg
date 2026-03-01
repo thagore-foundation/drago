@@ -20,7 +20,7 @@ import src.project.scaffold as scaffold
 import src.test.runner as test_runner
 
 func usage():
-  print("drago <command> [args] [--quiet] [--verbose] [--features <f1,f2>] [--all-features]")
+  print("drago <command> [args] [--quiet] [--verbose] [-p|--package <name>] [--features <f1,f2>] [--all-features]")
   print("commands:")
   print("  new <name>")
   print("  build")
@@ -35,6 +35,9 @@ func usage():
   print("  check")
   print("  cache <list|size|clean|purge|purge-unused>")
   print("  audit")
+  print("  tree")
+  print("  why <package>")
+  print("  outdated")
 
 func project_root() -> ptr:
   return fs.getcwd()
@@ -78,6 +81,156 @@ func workspace_member_roots(root: ptr, quiet: i32) -> ptr:
   if (list.list_count(roots) == 0):
     list.list_append(roots, root)
   return roots
+
+func member_matches_selector(member_root: ptr, selector: ptr) -> bool:
+  let wanted = str.trim(selector)
+  if (utils.is_empty(wanted)):
+    return true
+  let name = manifest.load_name(member_root)
+  if (str.str_eq(name, wanted)):
+    return true
+  if (str.str_eq(member_root, wanted)):
+    return true
+  if (utils.ends_with(member_root, str.concat("/", wanted))):
+    return true
+  if (utils.ends_with(member_root, str.concat("\\", wanted))):
+    return true
+  return false
+
+func selected_member_roots(root: ptr, quiet: i32, package_name: ptr) -> ptr:
+  let all_members = workspace_member_roots(root, quiet)
+  if (utils.is_empty(package_name)):
+    return all_members
+  let filtered = list.list_new()
+  let i: i64 = 0
+  let n = list.list_count(all_members)
+  while (i < n):
+    let member_root = list.list_get(all_members, i)
+    if (member_matches_selector(member_root, package_name)):
+      list.list_append(filtered, member_root)
+    i = i + 1
+  if (list.list_count(filtered) != 0):
+    return filtered
+  out.print_error(str.concat("package not found in workspace: ", package_name))
+  return filtered
+
+func dep_version_text(dep_line: ptr) -> ptr:
+  let spec = manifest.dependency_spec(dep_line)
+  let out = str.trim(spec)
+  out = str.replace(out, "\"", "")
+  out = str.replace(out, "'", "")
+  return out
+
+func lock_version(lines: ptr, dep_name: ptr) -> ptr:
+  let i: i64 = 0
+  let n = list.list_count(lines)
+  while (i < n):
+    let line = list.list_get(lines, i)
+    if (str.str_eq(lockfile.pkg_name(line), dep_name)):
+      return lockfile.pkg_version(line)
+    i = i + 1
+  return str.concat("", "")
+
+func print_dependency_tree_for_member(member_root: ptr, features: ptr, all_features: i32):
+  let member_name = project_name(member_root)
+  print(str.concat(member_name, ":"))
+  let deps = manifest.load_dependencies_for_features(member_root, features, all_features)
+  let lines = lockfile.load_lines(member_root)
+  let n = list.list_count(deps)
+  if (n == 0):
+    print("  (no dependencies)")
+    return 0
+  let i: i64 = 0
+  while (i < n):
+    let dep = list.list_get(deps, i)
+    let dep_name = manifest.dependency_name(dep)
+    let wanted = dep_version_text(dep)
+    let locked = lock_version(lines, dep_name)
+    if (utils.is_empty(locked)):
+      print(str.concat("  - ", str.concat(dep_name, str.concat(" @", wanted))))
+    else:
+      let detail = str.concat(" @", str.concat(wanted, str.concat(" (locked ", str.concat(locked, ")"))))
+      print(str.concat("  - ", str.concat(dep_name, detail)))
+    i = i + 1
+  return 0
+
+func handle_tree(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32) -> bool:
+  let members = selected_member_roots(root, quiet, package_name)
+  let n = list.list_count(members)
+  if (n == 0):
+    return false
+  out.print_action("🌳", "Dependency tree", quiet)
+  let i: i64 = 0
+  while (i < n):
+    if (i != 0):
+      print("")
+    print_dependency_tree_for_member(list.list_get(members, i), features, all_features)
+    i = i + 1
+  return true
+
+func handle_why(root: ptr, pkg: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32) -> bool:
+  if (utils.is_empty(pkg)):
+    out.print_error("why requires package name")
+    return false
+  let members = selected_member_roots(root, quiet, package_name)
+  let n = list.list_count(members)
+  if (n == 0):
+    return false
+  out.print_action("🔍", str.concat("Why ", pkg), quiet)
+  let found = 0
+  let i: i64 = 0
+  while (i < n):
+    let member_root = list.list_get(members, i)
+    let deps = manifest.load_dependencies_for_features(member_root, features, all_features)
+    let j: i64 = 0
+    let m = list.list_count(deps)
+    while (j < m):
+      let dep = list.list_get(deps, j)
+      let dep_name = manifest.dependency_name(dep)
+      if (str.str_eq(dep_name, pkg)):
+        found = 1
+        print(str.concat("  - ", str.concat(project_name(member_root), str.concat(" depends on ", str.concat(pkg, str.concat(" @", dep_version_text(dep)))))))
+      j = j + 1
+    i = i + 1
+  if (found != 0):
+    return true
+  out.print_warning(str.concat("No direct dependency on ", pkg), quiet)
+  return false
+
+func handle_outdated(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32) -> bool:
+  let members = selected_member_roots(root, quiet, package_name)
+  let n = list.list_count(members)
+  if (n == 0):
+    return false
+  out.print_action("⬆", "Checking outdated dependencies", quiet)
+  let outdated_count: i64 = 0
+  let i: i64 = 0
+  while (i < n):
+    let member_root = list.list_get(members, i)
+    let deps = manifest.load_dependencies_for_features(member_root, features, all_features)
+    let j: i64 = 0
+    let m = list.list_count(deps)
+    while (j < m):
+      let dep = list.list_get(deps, j)
+      let dep_name = manifest.dependency_name(dep)
+      let current = dep_version_text(dep)
+      if (utils.is_empty(current)):
+        j = j + 1
+        continue
+      let info = registry.find_package(dep_name)
+      if (str.str_eq(registry.info_found(info), "1")):
+        let latest = registry.info_version(info)
+        if (str.str_eq(latest, "") == false):
+          if (str.str_eq(current, latest) == false):
+            outdated_count = outdated_count + 1
+            print(str.concat("  - ", str.concat(project_name(member_root), str.concat(": ", str.concat(dep_name, str.concat(" ", str.concat(current, str.concat(" -> ", latest))))))))
+      j = j + 1
+    i = i + 1
+  if (outdated_count == 0):
+    out.print_summary_ok("All dependencies are up to date", quiet)
+    return true
+  out.print_warning(str.concat(str.from_int(outdated_count), " outdated dependency entries found"), quiet)
+  return false
 
 func handle_cache(sub: ptr, quiet: i32) -> bool:
   let init_rc = cache.ensure_layout()
@@ -148,9 +301,11 @@ func handle_build_single(root: ptr, quiet: i32, features: ptr, all_features: i32
   out.print_summary_ok(summary, quiet)
   return true
 
-func handle_build(root: ptr, quiet: i32, features: ptr, all_features: i32) -> bool:
-  let members = workspace_member_roots(root, quiet)
+func handle_build(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32) -> bool:
+  let members = selected_member_roots(root, quiet, package_name)
   let n = list.list_count(members)
+  if (n == 0):
+    return false
   if (n > 1):
     out.print_action("🧩", str.concat("Building workspace (", str.concat(str.from_int(n), " members)")), quiet)
   let i: i64 = 0
@@ -160,8 +315,27 @@ func handle_build(root: ptr, quiet: i32, features: ptr, all_features: i32) -> bo
     i = i + 1
   return true
 
-func handle_run(root: ptr, quiet: i32, features: ptr, all_features: i32) -> bool:
-  let members = workspace_member_roots(root, quiet)
+func handle_run(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32) -> bool:
+  let members = selected_member_roots(root, quiet, package_name)
+  let n = list.list_count(members)
+  if (n == 0):
+    return false
+  if (n > 1):
+    out.print_error("run matches multiple packages; choose one with --package")
+    return false
+  if (utils.is_empty(package_name) == false):
+    let run_root = list.list_get(members, 0)
+    let build_ok = handle_build_single(run_root, quiet, features, all_features)
+    if (build_ok == false):
+      return false
+    print("")
+    out.print_action("🚀", str.concat("Running ", project_name(run_root)), quiet)
+    out.print_separator(quiet)
+    let bin = linker.output_binary_path(run_root, project_name(run_root))
+    let rc = runner.run_binary(bin)
+    if (rc == 0):
+      return true
+    return false
   if (list.list_count(members) > 1):
     out.print_error("run in workspace root is ambiguous; run inside a member package")
     return false
@@ -233,19 +407,33 @@ func handle_remove(root: ptr, pkg: ptr, quiet: i32) -> bool:
   out.print_success(str.concat("Removed ", pkg), quiet)
   return true
 
-func handle_install(root: ptr, quiet: i32) -> bool:
-  out.print_action("📦", "Installing dependencies", quiet)
-  let install_rc = registry.reg_install_all(root)
-  if (install_rc == 0):
+func handle_install(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32) -> bool:
+  let members = selected_member_roots(root, quiet, package_name)
+  let n = list.list_count(members)
+  if (n == 0):
     return false
+  out.print_action("📦", "Installing dependencies", quiet)
+  let i: i64 = 0
+  while (i < n):
+    let install_rc = registry.reg_install_all(list.list_get(members, i), features, all_features)
+    if (install_rc == 0):
+      return false
+    i = i + 1
   out.print_summary_ok("Dependencies installed", quiet)
   return true
 
-func handle_update(root: ptr, quiet: i32) -> bool:
-  out.print_action("📦", "Updating dependencies", quiet)
-  let update_rc = registry.reg_update_all(root)
-  if (update_rc == 0):
+func handle_update(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32) -> bool:
+  let members = selected_member_roots(root, quiet, package_name)
+  let n = list.list_count(members)
+  if (n == 0):
     return false
+  out.print_action("📦", "Updating dependencies", quiet)
+  let i: i64 = 0
+  while (i < n):
+    let update_rc = registry.reg_update_all(list.list_get(members, i), features, all_features)
+    if (update_rc == 0):
+      return false
+    i = i + 1
   out.print_summary_ok("Dependencies updated", quiet)
   return true
 
@@ -283,9 +471,11 @@ func handle_check_single(root: ptr, quiet: i32, features: ptr, all_features: i32
   out.print_summary_ok(str.concat("Typecheck/build check passed ", out.format_ms(time.now_ms() - started)), quiet)
   return true
 
-func handle_check(root: ptr, quiet: i32, features: ptr, all_features: i32) -> bool:
-  let members = workspace_member_roots(root, quiet)
+func handle_check(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32) -> bool:
+  let members = selected_member_roots(root, quiet, package_name)
   let n = list.list_count(members)
+  if (n == 0):
+    return false
   if (n > 1):
     out.print_action("🧩", str.concat("Checking workspace (", str.concat(str.from_int(n), " members)")), quiet)
   let i: i64 = 0
@@ -295,9 +485,11 @@ func handle_check(root: ptr, quiet: i32, features: ptr, all_features: i32) -> bo
     i = i + 1
   return true
 
-func handle_test(root: ptr, quiet: i32, features: ptr, all_features: i32) -> bool:
-  let members = workspace_member_roots(root, quiet)
+func handle_test(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32) -> bool:
+  let members = selected_member_roots(root, quiet, package_name)
   let n = list.list_count(members)
+  if (n == 0):
+    return false
   if (n > 1):
     out.print_action("🧩", str.concat("Testing workspace (", str.concat(str.from_int(n), " members)")), quiet)
   let i: i64 = 0
@@ -327,6 +519,7 @@ func main() -> i32:
   let arg2 = parser.parsed_arg2(parsed)
   let quiet = parser.parsed_quiet(parsed)
   let verbose = parser.parsed_verbose(parsed)
+  let package_name = parser.parsed_package(parsed)
   let features = parser.parsed_features(parsed)
   let all_features = parser.parsed_all_features(parsed)
   let root = project_root()
@@ -354,15 +547,15 @@ func main() -> i32:
       return 0
     return 1
   if (str.str_eq(cmd, "build")):
-    if (handle_build(root, quiet, features, all_features)):
+    if (handle_build(root, quiet, package_name, features, all_features)):
       return 0
     return 1
   if (str.str_eq(cmd, "run")):
-    if (handle_run(root, quiet, features, all_features)):
+    if (handle_run(root, quiet, package_name, features, all_features)):
       return 0
     return 1
   if (str.str_eq(cmd, "test")):
-    if (handle_test(root, quiet, features, all_features)):
+    if (handle_test(root, quiet, package_name, features, all_features)):
       return 0
     return 1
   if (str.str_eq(cmd, "add")):
@@ -374,11 +567,11 @@ func main() -> i32:
       return 0
     return 1
   if (str.str_eq(cmd, "install")):
-    if (handle_install(root, quiet)):
+    if (handle_install(root, quiet, package_name, features, all_features)):
       return 0
     return 1
   if (str.str_eq(cmd, "update")):
-    if (handle_update(root, quiet)):
+    if (handle_update(root, quiet, package_name, features, all_features)):
       return 0
     return 1
   if (str.str_eq(cmd, "publish")):
@@ -390,7 +583,7 @@ func main() -> i32:
       return 0
     return 1
   if (str.str_eq(cmd, "check")):
-    if (handle_check(root, quiet, features, all_features)):
+    if (handle_check(root, quiet, package_name, features, all_features)):
       return 0
     return 1
   if (str.str_eq(cmd, "cache")):
@@ -399,6 +592,18 @@ func main() -> i32:
     return 1
   if (str.str_eq(cmd, "audit")):
     if (handle_audit(root, quiet)):
+      return 0
+    return 1
+  if (str.str_eq(cmd, "tree")):
+    if (handle_tree(root, quiet, package_name, features, all_features)):
+      return 0
+    return 1
+  if (str.str_eq(cmd, "why")):
+    if (handle_why(root, arg1, quiet, package_name, features, all_features)):
+      return 0
+    return 1
+  if (str.str_eq(cmd, "outdated")):
+    if (handle_outdated(root, quiet, package_name, features, all_features)):
       return 0
     return 1
 

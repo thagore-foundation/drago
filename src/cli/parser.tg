@@ -38,6 +38,12 @@ pub func command_from_text(raw: ptr) -> ptr:
     return str.concat("", "cache")
   if (str.str_eq(raw, "audit")):
     return str.concat("", "audit")
+  if (str.str_eq(raw, "tree")):
+    return str.concat("", "tree")
+  if (str.str_eq(raw, "why")):
+    return str.concat("", "why")
+  if (str.str_eq(raw, "outdated")):
+    return str.concat("", "outdated")
   return str.concat("", "")
 
 pub func parse() -> ptr:
@@ -45,6 +51,7 @@ pub func parse() -> ptr:
   let kind = str.concat("", "help")
   let arg1 = str.concat("", "")
   let arg2 = str.concat("", "")
+  let package_name = str.concat("", "")
   let features = str.concat("", "")
   let quiet = 0
   let verbose = 0
@@ -60,6 +67,26 @@ pub func parse() -> ptr:
       continue
     if (str.str_eq(a, "--verbose")):
       verbose = 1
+      i = i + 1
+      continue
+    if (str.str_eq(a, "-p")):
+      if ((i + 1) < argc):
+        package_name = process.argv(i + 1)
+        i = i + 2
+        continue
+      i = i + 1
+      continue
+    if (str.str_eq(a, "--package")):
+      if ((i + 1) < argc):
+        package_name = process.argv(i + 1)
+        i = i + 2
+        continue
+      i = i + 1
+      continue
+    if (str.str_starts(a, "--package=")):
+      let parts = str.split(a, "=")
+      if (list.list_count(parts) >= 2):
+        package_name = list.list_get(parts, 1)
       i = i + 1
       continue
     if (str.str_eq(a, "--all-features")):
@@ -107,7 +134,7 @@ pub func parse() -> ptr:
   let af = str.concat("", "0")
   if (all_features != 0):
     af = str.concat("", "1")
-  return str.concat(kind, str.concat("|", str.concat(arg1, str.concat("|", str.concat(arg2, str.concat("|", str.concat(q, str.concat("|", str.concat(v, str.concat("|", str.concat(features, str.concat("|", af))))))))))))
+  return str.concat(kind, str.concat("|", str.concat(arg1, str.concat("|", str.concat(arg2, str.concat("|", str.concat(q, str.concat("|", str.concat(v, str.concat("|", str.concat(package_name, str.concat("|", str.concat(features, str.concat("|", af))))))))))))))
 
 pub func part(parsed: ptr, idx: i64) -> ptr:
   let parts = str.split(parsed, "|")
@@ -135,9 +162,12 @@ pub func parsed_verbose(parsed: ptr) -> i32:
   return 0
 
 pub func parsed_features(parsed: ptr) -> ptr:
-  return part(parsed, 5)
+  return part(parsed, 6)
 
 pub func parsed_all_features(parsed: ptr) -> i32:
-  if (str.str_eq(part(parsed, 6), "1")):
+  if (str.str_eq(part(parsed, 7), "1")):
     return 1
   return 0
+
+pub func parsed_package(parsed: ptr) -> ptr:
+  return part(parsed, 5)

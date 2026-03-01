@@ -154,8 +154,8 @@ pub func reg_add_dependency(project_root: ptr, pkg: ptr, requested_version: ptr)
     return 0
   return 1
 
-pub func reg_install_all(project_root: ptr) -> i32:
-  let dependencies = manifest.load_dependencies(project_root)
+pub func reg_install_all(project_root: ptr, feature_csv: ptr, all_features: i32) -> i32:
+  let dependencies = manifest.load_dependencies_for_features(project_root, feature_csv, all_features)
   let i: i64 = 0
   let n = list.list_count(dependencies)
   while (i < n):
@@ -168,8 +168,8 @@ pub func reg_install_all(project_root: ptr) -> i32:
     i = i + 1
   return 1
 
-pub func reg_update_all(project_root: ptr) -> i32:
-  let dependencies = manifest.load_dependencies(project_root)
+pub func reg_update_all(project_root: ptr, feature_csv: ptr, all_features: i32) -> i32:
+  let dependencies = manifest.load_dependencies_for_features(project_root, feature_csv, all_features)
   let i: i64 = 0
   let n = list.list_count(dependencies)
   while (i < n):

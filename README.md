@@ -34,11 +34,16 @@ $THAGC build src/main.tg -o drago.bin
 - `drago check`
 - `drago cache list|size|clean|purge|purge-unused`
 - `drago audit`
+- `drago tree`
+- `drago why <package>`
+- `drago outdated`
 - Global build flags:
+  - `-p, --package <name>`
   - `--features <f1,f2>`
   - `--all-features`
 
-`--features` / `--all-features` are supported in `build`, `run`, `check`, and `test`.
+`--features` / `--all-features` are supported in `build`, `run`, `check`, `test`, `install`, `update`, `tree`, `why`, and `outdated`.
+`--package` selects one workspace member by package name or member path.
 
 ## Workspace
 
@@ -51,6 +56,24 @@ members = ["crates/a", "crates/b"]
 
 - `drago build` / `drago check` / `drago test` at workspace root run for all members.
 - `drago run` at workspace root requires exactly one member (otherwise it is ambiguous).
+- Use `--package <name>` to target one member for `build/run/test/check/install/update/tree/why/outdated`.
+
+## Optional Dependencies
+
+Drago supports optional dependencies with feature activation:
+
+```toml
+[dependencies]
+core = "1.0.0"
+optdep = { version = "2.0.0", optional = true, default-features = false }
+
+[features]
+default = ["dep:optdep"]
+extra = ["dep:optdep"]
+```
+
+- Optional dependencies are included when enabled by features (`dep:<name>` or `<name>` item).
+- `--all-features` enables all feature-defined optional dependencies.
 
 ## Registry
 
