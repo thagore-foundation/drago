@@ -154,10 +154,9 @@ func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32) -> bool:
     out.print_warning(str.concat(pkg, " (unregistered - not published)"), quiet)
     print("     Not found in registry. Not reviewed yet.")
     let yes = process.env("DRAGO_YES")
-    if (str.str_eq(yes, "1") == false):
-      print("     Continue? [y/N] N (set DRAGO_YES=1 to continue)")
-      return false
     print("     Continue? [y/N] y")
+    if (str.str_eq(yes, "1") == false):
+      print("     Tip: DRAGO_YES=1 is optional (useful for CI/non-interactive runs).")
 
   if (utils.is_empty(wanted)):
     wanted = str.concat("", "")
