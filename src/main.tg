@@ -20,7 +20,7 @@ import src.project.scaffold as scaffold
 import src.test.runner as test_runner
 
 func usage():
-  print("drago <command> [args] [--quiet] [--verbose]")
+  print("drago <command> [args] [--quiet] [--verbose] [--features <f1,f2>] [--all-features]")
   print("commands:")
   print("  new <name>")
   print("  build")
@@ -94,7 +94,7 @@ func handle_cache(sub: ptr, quiet: i32) -> bool:
   out.print_error("cache subcommand required: list|size|clean|purge|purge-unused")
   return false
 
-func handle_build(root: ptr, quiet: i32) -> bool:
+func handle_build(root: ptr, quiet: i32, features: ptr, all_features: i32) -> bool:
   let name = project_name(root)
   let version = project_version(root)
   out.print_action("🔨", str.concat("Building ", str.concat(name, str.concat(" v", version))), quiet)
@@ -104,7 +104,7 @@ func handle_build(root: ptr, quiet: i32) -> bool:
   if (conflict_rc == 0):
     out.print_summary_fail("Build failed")
     return false
-  let build_rc = compiler.build_project(root, quiet)
+  let build_rc = compiler.build_project(root, quiet, features, all_features)
   if (build_rc == 0):
     return false
   let elapsed = time.now_ms() - started
@@ -120,8 +120,8 @@ func handle_build(root: ptr, quiet: i32) -> bool:
   out.print_summary_ok(summary, quiet)
   return true
 
-func handle_run(root: ptr, quiet: i32) -> bool:
-  let build_ok = handle_build(root, quiet)
+func handle_run(root: ptr, quiet: i32, features: ptr, all_features: i32) -> bool:
+  let build_ok = handle_build(root, quiet, features, all_features)
   if (build_ok == false):
     return false
   print("")
@@ -213,7 +213,7 @@ func handle_fmt(root: ptr, quiet: i32) -> bool:
   out.print_success("Format check completed", quiet)
   return true
 
-func handle_check(root: ptr, quiet: i32) -> bool:
+func handle_check(root: ptr, quiet: i32, features: ptr, all_features: i32) -> bool:
   out.print_action("🔨", str.concat("Checking ", str.concat(project_name(root), str.concat(" v", project_version(root)))), quiet)
   let entry = path.join(root, manifest.load_entry(root))
   let started = time.now_ms()
@@ -224,6 +224,9 @@ func handle_check(root: ptr, quiet: i32) -> bool:
   if (fs.exists(out_file_ll) != 0):
     fs.remove_path(out_file_ll)
   let cmd = str.concat(linker.thagc_bin(), str.concat(" build ", str.concat(entry, str.concat(" --emit-llvm -o ", out_file))))
+  let feature_args = linker.feature_cli_args(features, all_features)
+  if (str.str_eq(feature_args, "") == false):
+    cmd = str.concat(cmd, feature_args)
   let captured = process.capture(str.concat(cmd, " 2>&1"))
   if (fs.exists(out_file) == 0):
     if (fs.exists(out_file_ll) != 0):
@@ -255,6 +258,8 @@ func main() -> i32:
   let arg2 = parser.parsed_arg2(parsed)
   let quiet = parser.parsed_quiet(parsed)
   let verbose = parser.parsed_verbose(parsed)
+  let features = parser.parsed_features(parsed)
+  let all_features = parser.parsed_all_features(parsed)
   let root = project_root()
   if (verbose != 0):
     print(str.concat("drago root: ", root))
@@ -280,15 +285,15 @@ func main() -> i32:
       return 0
     return 1
   if (str.str_eq(cmd, "build")):
-    if (handle_build(root, quiet)):
+    if (handle_build(root, quiet, features, all_features)):
       return 0
     return 1
   if (str.str_eq(cmd, "run")):
-    if (handle_run(root, quiet)):
+    if (handle_run(root, quiet, features, all_features)):
       return 0
     return 1
   if (str.str_eq(cmd, "test")):
-    if (test_runner.run_tests(root, quiet) != 0):
+    if (test_runner.run_tests(root, quiet, features, all_features) != 0):
       return 0
     return 1
   if (str.str_eq(cmd, "add")):
@@ -316,7 +321,7 @@ func main() -> i32:
       return 0
     return 1
   if (str.str_eq(cmd, "check")):
-    if (handle_check(root, quiet)):
+    if (handle_check(root, quiet, features, all_features)):
       return 0
     return 1
   if (str.str_eq(cmd, "cache")):
