@@ -16,88 +16,41 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-14, windows-latest]
+    name: Build release bundle (Linux)
+    runs-on: ubuntu-latest
     env:
-      THAGC_TAG: v0.8.3
+      THAGORE_REF: main
       DRAGO_COLOR: never
     steps:
       - uses: actions/checkout@v4
 
       - name: Install LLVM 21 runtime (Linux)
-        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget lsb-release gnupg software-properties-common
+          sudo apt-get install -y wget lsb-release gnupg software-properties-common cmake ninja-build git libffi-dev libxml2-dev zlib1g-dev
           wget -q https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 21
           echo "LD_LIBRARY_PATH=/usr/lib/llvm-21/lib:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
         shell: bash
 
-      - name: Install LLVM 21 runtime (macOS)
-        if: runner.os == 'macOS'
+      - name: Build thagc from source (main)
         run: |
-          brew install llvm@21 || brew install llvm
-          LLVM_PREFIX="$(brew --prefix llvm@21 2>/dev/null || brew --prefix llvm)"
-          mkdir -p /opt/homebrew/opt
-          if [ ! -e /opt/homebrew/opt/llvm@21 ]; then
-            ln -s "${LLVM_PREFIX}" /opt/homebrew/opt/llvm@21
-          fi
-          echo "${LLVM_PREFIX}/bin" >> "$GITHUB_PATH"
-          echo "DYLD_LIBRARY_PATH=${LLVM_PREFIX}/lib:${DYLD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          chmod +x .github/scripts/build_thagc_from_source.sh
+          .github/scripts/build_thagc_from_source.sh "${THAGORE_REF}"
         shell: bash
 
-      - name: Install LLVM 21 runtime (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          choco install llvm --version=21.1.0 -y
-          if (!(Test-Path "C:\Program Files\LLVM\bin")) {
-            choco install llvm -y
-          }
-          "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-        shell: pwsh
-
-      - name: Install thagc (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: |
-          chmod +x .github/scripts/install_thagc_posix.sh
-          .github/scripts/install_thagc_posix.sh "${THAGC_TAG}" stable
-        shell: bash
-
-      - name: Install thagc (Windows)
-        if: runner.os == 'Windows'
-        run: .github/scripts/install_thagc_windows.ps1 -Tag "${env:THAGC_TAG}" -Channel stable
-        shell: pwsh
-
-      - name: Build binary (Linux/macOS)
-        if: runner.os != 'Windows'
+      - name: Build binary
         run: |
           thagc build src/main.tg -o drago.bin
           mkdir -p dist
-          if [ "${{ runner.os }}" = "Linux" ]; then
-            tar -czf "dist/drago-${GITHUB_REF_NAME}-linux-${{ runner.arch }}.tar.gz" drago.bin README.md
-          else
-            tar -czf "dist/drago-${GITHUB_REF_NAME}-macos-${{ runner.arch }}.tar.gz" drago.bin README.md
-          fi
+          tar -czf "dist/drago-${GITHUB_REF_NAME}-linux-${{ runner.arch }}.tar.gz" drago.bin README.md
         shell: bash
-
-      - name: Build binary (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          thagc build src/main.tg -o drago.exe
-          New-Item -ItemType Directory -Path dist -Force | Out-Null
-          Compress-Archive -Path drago.exe,README.md -DestinationPath "dist/drago-$env:GITHUB_REF_NAME-windows-${{ runner.arch }}.zip"
-        shell: pwsh
 
       - name: Upload release bundle
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ runner.os }}-${{ runner.arch }}
+          name: release-linux-${{ runner.arch }}
           path: dist/*
           if-no-files-found: error
 

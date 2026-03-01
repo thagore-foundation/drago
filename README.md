@@ -66,8 +66,8 @@ export DRAGO_REGISTRY_BASE="file:///media/lehungquangminh/QM_SSD/drago/registry"
 
 - `Drago CI` (`.github/workflows/ci.yml`)
   - Trigger: `push` to `main`, all pull requests.
-  - Matrix: Linux, macOS (ARM runner), Windows.
-  - Steps: install `thagc`, build `drago`, run `drago check` and `drago test`.
+  - Runner: Linux (`ubuntu-latest`).
+  - Steps: provision LLVM 21, build `thagc` from `thagore` source, build `drago`, run `drago check` and `drago test`.
 - `Drago Release` (`.github/workflows/release.yml`)
   - Trigger: tags `v*` (and manual dispatch).
-  - Build artifacts for Linux/macOS/Windows and publish them to GitHub Releases.
+  - Build Linux artifact and publish it to GitHub Releases.
