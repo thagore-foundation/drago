@@ -6,9 +6,24 @@ import src.project.manifest as manifest
 
 pub func thagc_bin() -> ptr:
   let bin = process.env("THAGC")
-  if (str.str_eq(bin, "")):
-    return str.concat("", "thagc")
-  return bin
+  if (str.str_eq(bin, "") == false):
+    if (fs.exists(bin) != 0):
+      return bin
+
+  let cwd = path.cwd()
+  let local_repo = path.join(path.join(path.join(path.join(cwd, ".."), "thagore"), "build-llvm21"), "compiler/thagc")
+  if (fs.exists(local_repo) != 0):
+    return local_repo
+
+  let local_build = path.join(path.join(cwd, "build-llvm21"), "compiler/thagc")
+  if (fs.exists(local_build) != 0):
+    return local_build
+
+  let local_bin = path.join(cwd, "thagc")
+  if (fs.exists(local_bin) != 0):
+    return local_bin
+
+  return str.concat("", "thagc")
 
 pub func ensure_target_dir(project_root: ptr) -> i32:
   let t = path.join(project_root, "target")

@@ -37,11 +37,14 @@ pub func run_tests(project_root: ptr, quiet: i32) -> i32:
     print("no tests found")
     return 1
 
+  let target_dir = path.join(project_root, "target")
+  fs.mkdir(target_dir)
+
   let i: i64 = 0
   let ok = 1
   while (i < n):
     let test_file = list.list_get(tests, i)
-    let out_bin = path.join(path.join(project_root, "target"), str.concat("test_", str.concat(str.from_int(i), ".bin")))
+    let out_bin = path.join(target_dir, str.concat("test_", str.concat(str.from_int(i), ".bin")))
     let cmd_build = str.concat(linker.thagc_bin(), str.concat(" build ", str.concat(test_file, str.concat(" -o ", out_bin))))
     let start = process.capture("date +%s%3N")
     if (process.run(cmd_build) != 0):
@@ -49,7 +52,7 @@ pub func run_tests(project_root: ptr, quiet: i32) -> i32:
       ok = 0
       i = i + 1
       continue
-    let run_rc = process.run(str.concat("\"", str.concat(out_bin, "\"")))
+    let run_rc = process.run(out_bin)
     let end = process.capture("date +%s%3N")
     let elapsed = str.to_int(str.trim(end)) - str.to_int(str.trim(start))
     if (run_rc == 0):

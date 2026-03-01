@@ -1,6 +1,7 @@
 import src.project.manifest as manifest
 import lib.fs as fs
 import lib.path as path
+import std.string as str
 
 func main() -> i32:
   let root = "."
@@ -11,7 +12,7 @@ func main() -> i32:
     print("manifest add failed")
     return 1
   let name = manifest.load_name(tmp)
-  if (name == 0):
+  if (str.str_eq(name, "")):
     return 2
   fs.remove_path(tmp)
   return 0
