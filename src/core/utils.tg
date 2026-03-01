@@ -31,7 +31,10 @@ pub func ends_with(text: ptr, suffix: ptr) -> bool:
   return false
 
 pub func strip_quotes(text: ptr) -> ptr:
-  return str.trim(str.concat("", text))
+  let out = str.trim(str.concat("", text))
+  out = str.replace(out, "\"", "")
+  out = str.replace(out, "'", "")
+  return str.trim(out)
 
 pub func utils_contains(text: ptr, part: ptr) -> bool:
   let rc = str.str_has(str.concat("", text), str.concat("", part))

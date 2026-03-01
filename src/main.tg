@@ -124,6 +124,43 @@ func selected_single_member_root(root: ptr, quiet: i32, package_name: ptr, actio
     return str.concat("", "")
   return list.list_get(members, 0)
 
+func lock_line_exists(lines: ptr, line: ptr) -> i32:
+  let i: i64 = 0
+  let n = list.list_count(lines)
+  while (i < n):
+    if (str.str_eq(list.list_get(lines, i), line)):
+      return 1
+    i = i + 1
+  return 0
+
+func append_lock_line_unique(lines: ptr, line: ptr):
+  if (lock_line_exists(lines, line) == 0):
+    list.list_append(lines, line)
+  return 0
+
+func sync_workspace_lock(root: ptr, quiet: i32) -> i32:
+  let declared = manifest.load_workspace_members(root)
+  if (list.list_count(declared) == 0):
+    return 1
+  let members = workspace_member_roots(root, quiet)
+  let merged = list.list_new()
+  let i: i64 = 0
+  let n = list.list_count(members)
+  while (i < n):
+    let member_root = list.list_get(members, i)
+    let lines = lockfile.load_lines(member_root)
+    let j: i64 = 0
+    let m = list.list_count(lines)
+    while (j < m):
+      append_lock_line_unique(merged, list.list_get(lines, j))
+      j = j + 1
+    i = i + 1
+  if (lockfile.save_lines(root, merged) == 0):
+    out.print_error("failed to write workspace drago.lock")
+    return 0
+  out.print_done("Updated", "drago.lock (workspace)", quiet)
+  return 1
+
 func dep_version_text(dep_line: ptr) -> ptr:
   let spec = manifest.dependency_spec(dep_line)
   let out = str.trim(spec)
@@ -618,6 +655,8 @@ func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32, package_name: ptr
   if (add_rc == 0):
     out.print_summary_fail("Add failed")
     return false
+  if (sync_workspace_lock(root, quiet) == 0):
+    return false
   let elapsed = time.now_ms() - started
   out.print_done("Updated", "drago.toml", quiet)
   out.print_done("Updated", "drago.lock", quiet)
@@ -641,6 +680,8 @@ func handle_remove(root: ptr, pkg: ptr, quiet: i32, package_name: ptr) -> bool:
   let lock_rc = lockfile.lock_remove(target_root, pkg)
   if (lock_rc == 0):
     return false
+  if (sync_workspace_lock(root, quiet) == 0):
+    return false
   out.print_success(str.concat("Removed ", pkg), quiet)
   return true
 
@@ -656,6 +697,8 @@ func handle_install(root: ptr, quiet: i32, package_name: ptr, features: ptr, all
     if (install_rc == 0):
       return false
     i = i + 1
+  if (sync_workspace_lock(root, quiet) == 0):
+    return false
   out.print_summary_ok("Dependencies installed", quiet)
   return true
 
@@ -671,6 +714,8 @@ func handle_update(root: ptr, dep_name: ptr, quiet: i32, package_name: ptr, feat
     if (update_rc == 0):
       return false
     i = i + 1
+  if (sync_workspace_lock(root, quiet) == 0):
+    return false
   out.print_summary_ok("Dependencies updated", quiet)
   return true
 
