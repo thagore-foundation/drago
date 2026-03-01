@@ -28,7 +28,7 @@ $THAGC build src/main.tg -o drago.bin
 - `drago add <package> [version]`
 - `drago remove <package>`
 - `drago install`
-- `drago update [dependency]`
+- `drago update [dependency|drago|thagc]`
 - `drago publish`
 - `drago fmt`
 - `drago check`
@@ -49,6 +49,8 @@ $THAGC build src/main.tg -o drago.bin
 `--features` / `--all-features` / `--no-default-features` are supported in `build`, `run`, `check`, `test`, `install`, `update`, `tree`, `why`, and `outdated`.
 `--package` selects one workspace member by package name or member path.
 `drago update <dependency>` updates one dependency (instead of all selected dependencies).
+`drago update drago` (or `drago update toolchain` / `drago update all`) runs `thagup` in default mode and updates both `drago` and `thagc`.
+`drago update thagc` runs `thagup --without-drago` and updates `thagc` only.
 `--locked` blocks commands that would modify `drago.lock` and fails if lockfile is out of sync for build/read commands.
 `--frozen` implies lockfile immutability and requires offline mode (`--offline` or `DRAGO_OFFLINE=1`) for networked commands.
 `--offline` disables network fetches for registry/package resolution and relies on local cache/file-based registry.
@@ -108,6 +110,11 @@ export DRAGO_REGISTRY_BASE="file:///media/lehungquangminh/QM_SSD/drago/registry"
 - `DRAGO_OFFLINE=1`: block network download and use local cache only
 - `DRAGO_REGISTRY_BASE`: registry base URL override
 - `GITHUB_TOKEN`: required for `drago publish`
+- `DRAGO_UPDATE_DRY_RUN=1`: pass `--dry-run` to `thagup` for self-update preview
+- `DRAGO_THAGC_TAG`: pass `--tag <value>` to `thagup`
+- `DRAGO_DRAGO_TAG`: pass `--drago-tag <value>` to `thagup`
+- `DRAGO_CHANNEL`: pass `--channel <value>` to `thagup`
+- `DRAGO_ARCH`: pass `--arch <value>` to `thagup`
 
 ## Notes
 

@@ -29,7 +29,7 @@ func usage():
   print("  add <package> [version]")
   print("  remove <package>")
   print("  install")
-  print("  update [dependency]")
+  print("  update [dependency|drago|thagc]")
   print("  publish")
   print("  fmt")
   print("  check")
@@ -172,6 +172,18 @@ func dep_version_text(dep_line: ptr) -> ptr:
   out = str.replace(out, "'", "")
   return out
 
+func is_self_update_target(name: ptr) -> i32:
+  let t = str.trim(name)
+  if (str.str_eq(t, "drago")):
+    return 1
+  if (str.str_eq(t, "thagc")):
+    return 1
+  if (str.str_eq(t, "toolchain")):
+    return 1
+  if (str.str_eq(t, "all")):
+    return 1
+  return 0
+
 func lock_version(lines: ptr, dep_name: ptr) -> ptr:
   let i: i64 = 0
   let n = list.list_count(lines)
@@ -182,7 +194,7 @@ func lock_version(lines: ptr, dep_name: ptr) -> ptr:
     i = i + 1
   return str.concat("", "")
 
-func command_requires_lock_consistency(cmd: ptr) -> i32:
+func command_requires_lock_consistency(cmd: ptr, arg1: ptr) -> i32:
   if (str.str_eq(cmd, "build")):
     return 1
   if (str.str_eq(cmd, "run")):
@@ -197,6 +209,9 @@ func command_requires_lock_consistency(cmd: ptr) -> i32:
     return 1
   if (str.str_eq(cmd, "outdated")):
     return 1
+  if (str.str_eq(cmd, "update")):
+    if (is_self_update_target(arg1) != 0):
+      return 0
   return 0
 
 func lock_consistent_for_member(member_root: ptr, features: ptr, all_features: i32, no_default_features: i32, quiet: i32) -> i32:
@@ -443,7 +458,7 @@ func handle_why(root: ptr, pkg: ptr, quiet: i32, package_name: ptr, features: pt
   out.print_warning(str.concat("No dependency chain found for ", pkg), quiet)
   return false
 
-func command_mutates_lock(cmd: ptr) -> i32:
+func command_mutates_lock(cmd: ptr, arg1: ptr) -> i32:
   if (str.str_eq(cmd, "add")):
     return 1
   if (str.str_eq(cmd, "remove")):
@@ -451,10 +466,12 @@ func command_mutates_lock(cmd: ptr) -> i32:
   if (str.str_eq(cmd, "install")):
     return 1
   if (str.str_eq(cmd, "update")):
+    if (is_self_update_target(arg1) != 0):
+      return 0
     return 1
   return 0
 
-func command_may_use_network(cmd: ptr) -> i32:
+func command_may_use_network(cmd: ptr, arg1: ptr) -> i32:
   if (str.str_eq(cmd, "add")):
     return 1
   if (str.str_eq(cmd, "install")):
@@ -469,16 +486,16 @@ func command_may_use_network(cmd: ptr) -> i32:
     return 1
   return 0
 
-func enforce_mode_guards(cmd: ptr, locked: i32, frozen: i32, offline: i32) -> bool:
+func enforce_mode_guards(cmd: ptr, arg1: ptr, locked: i32, frozen: i32, offline: i32) -> bool:
   let effective_locked = locked
   if (frozen != 0):
     effective_locked = 1
   if (effective_locked != 0):
-    if (command_mutates_lock(cmd) != 0):
+    if (command_mutates_lock(cmd, arg1) != 0):
       out.print_error("--locked/--frozen disallow commands that modify drago.lock")
       return false
   if (frozen != 0):
-    if (command_may_use_network(cmd) != 0):
+    if (command_may_use_network(cmd, arg1) != 0):
       let effective_offline = offline
       if (str.str_eq(process.env("DRAGO_OFFLINE"), "1")):
         effective_offline = 1
@@ -489,6 +506,51 @@ func enforce_mode_guards(cmd: ptr, locked: i32, frozen: i32, offline: i32) -> bo
     if (str.str_eq(cmd, "publish")):
       out.print_error("--offline disallows publish")
       return false
+  return true
+
+func thagup_args_for_target(target: ptr) -> ptr:
+  let args = str.concat("", " --force")
+  let thagc_tag = process.env("DRAGO_THAGC_TAG")
+  let drago_tag = process.env("DRAGO_DRAGO_TAG")
+  let channel = process.env("DRAGO_CHANNEL")
+  let arch = process.env("DRAGO_ARCH")
+  let dry_run = process.env("DRAGO_UPDATE_DRY_RUN")
+  if (str.str_eq(thagc_tag, "") == false):
+    args = str.concat(args, str.concat(" --tag ", thagc_tag))
+  if (str.str_eq(drago_tag, "") == false):
+    args = str.concat(args, str.concat(" --drago-tag ", drago_tag))
+  if (str.str_eq(channel, "") == false):
+    args = str.concat(args, str.concat(" --channel ", channel))
+  if (str.str_eq(arch, "") == false):
+    args = str.concat(args, str.concat(" --arch ", arch))
+  if (str.str_eq(dry_run, "1")):
+    args = str.concat(args, " --dry-run")
+  if (str.str_eq(target, "thagc")):
+    args = str.concat(args, " --without-drago")
+  return args
+
+func handle_toolchain_update(target: ptr, quiet: i32, offline: i32) -> bool:
+  if (offline != 0):
+    out.print_error("--offline cannot be used with toolchain self-update")
+    return false
+  let target_text = target
+  if (str.str_eq(target, "all")):
+    target_text = str.concat("", "drago")
+  if (str.str_eq(target, "toolchain")):
+    target_text = str.concat("", "drago")
+  out.print_action("🛠", str.concat("Updating ", target), quiet)
+  let os_name = process.env("OS")
+  if (str.str_eq(os_name, "Windows_NT")):
+    out.print_error("self-update via thagup is currently implemented for POSIX shells in drago")
+    return false
+  let url = str.concat("https:", str.concat("/", "/raw.githubusercontent.com/thagore-foundation/thagore/main/tooling/release/thagup.sh"))
+  let cmd = str.concat("curl -fsSL \"", str.concat(url, "\" | bash -s --"))
+  cmd = str.concat(cmd, thagup_args_for_target(target_text))
+  let rc = process.run(cmd)
+  if (rc != 0):
+    out.print_summary_fail("Self-update failed")
+    return false
+  out.print_summary_ok("Toolchain updated via thagup", quiet)
   return true
 
 func handle_outdated(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32, offline: i32) -> bool:
@@ -729,6 +791,8 @@ func handle_install(root: ptr, quiet: i32, package_name: ptr, features: ptr, all
   return true
 
 func handle_update(root: ptr, dep_name: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32, offline: i32) -> bool:
+  if (is_self_update_target(dep_name) != 0):
+    return handle_toolchain_update(dep_name, quiet, offline)
   let members = selected_member_roots(root, quiet, package_name)
   let n = list.list_count(members)
   if (n == 0):
@@ -842,13 +906,13 @@ func main() -> i32:
     print(str.concat("drago root: ", root))
   if (str.str_eq(cmd, "help") == false):
     if (str.str_eq(cmd, "version") == false):
-      if (enforce_mode_guards(cmd, locked, frozen, offline) == false):
+      if (enforce_mode_guards(cmd, arg1, locked, frozen, offline) == false):
         return 1
       let effective_locked = locked
       if (frozen != 0):
         effective_locked = 1
       if (effective_locked != 0):
-        if (command_requires_lock_consistency(cmd) != 0):
+        if (command_requires_lock_consistency(cmd, arg1) != 0):
           if (verify_locked_dependencies(root, quiet, package_name, features, all_features, no_default_features) == 0):
             out.print_error("lockfile is out of sync (use install/update without --locked to refresh)")
             return 1
