@@ -109,6 +109,48 @@ jobs:
         run: choco install llvm --version=21.1.8 -y --no-progress
         shell: pwsh
 
+      - name: Configure MSVC library paths (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archDir = if ("${{ matrix.arch }}" -eq "aarch64") { "arm64" } else { "x64" }
+
+          $vsRoot = "C:\Program Files\Microsoft Visual Studio\2022"
+          $edition = Get-ChildItem -Path $vsRoot -Directory -ErrorAction SilentlyContinue |
+            Where-Object { Test-Path (Join-Path $_.FullName "VC\Tools\MSVC") } |
+            Select-Object -First 1
+          if (-not $edition) {
+            throw "MSVC toolchain not found under $vsRoot"
+          }
+
+          $msvcVersion = Get-ChildItem -Path (Join-Path $edition.FullName "VC\Tools\MSVC") -Directory |
+            Sort-Object Name -Descending |
+            Select-Object -First 1
+          if (-not $msvcVersion) {
+            throw "MSVC version directory not found"
+          }
+
+          $msvcLib = Join-Path $msvcVersion.FullName "lib\$archDir"
+          if (-not (Test-Path $msvcLib)) {
+            throw "MSVC lib path not found: $msvcLib"
+          }
+
+          $kitsRoot = "C:\Program Files (x86)\Windows Kits\10\Lib"
+          $kitVersion = Get-ChildItem -Path $kitsRoot -Directory |
+            Sort-Object Name -Descending |
+            Select-Object -First 1
+          if (-not $kitVersion) {
+            throw "Windows Kits lib directory not found"
+          }
+
+          $ucrtLib = Join-Path $kitVersion.FullName "ucrt\$archDir"
+          $umLib = Join-Path $kitVersion.FullName "um\$archDir"
+          if (-not (Test-Path $ucrtLib)) { throw "UCRT lib path not found: $ucrtLib" }
+          if (-not (Test-Path $umLib)) { throw "Windows UM lib path not found: $umLib" }
+
+          "LIB=$msvcLib;$ucrtLib;$umLib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "LIBPATH=$msvcLib;$ucrtLib;$umLib;$env:LIBPATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Install thagc (Windows)
         if: runner.os == 'Windows'
         run: .github/scripts/install_thagc_windows.ps1 -Tag "${{ env.THAGC_TAG }}" -Channel stable -Arch "${{ matrix.arch }}"
@@ -119,12 +161,27 @@ jobs:
 
       - name: Build binary (POSIX)
         if: runner.os != 'Windows'
-        run: thagc build src/main.tg -o "${{ matrix.bin_name }}"
+        run: thagc build src/main.tg -o "${{ matrix.bin_name }}" --link-lib=sqlite3
         shell: bash
 
       - name: Build binary (Windows)
         if: runner.os == 'Windows'
-        run: thagc build src/main.tg -o "${{ matrix.bin_name }}" --link-lib=ucrt --link-lib=vcruntime --link-lib=msvcrt
+        run: |
+          $targetTriple = if ("${{ matrix.arch }}" -eq "aarch64") { "aarch64-pc-windows-msvc" } else { "x86_64-pc-windows-msvc" }
+          thagc build src/main.tg -o "${{ matrix.bin_name }}" `
+            --target $targetTriple `
+            --link-lib=msvcprt `
+            --link-lib=ucrt `
+            --link-lib=vcruntime `
+            --link-lib=msvcrt `
+            --link-lib=kernel32 `
+            --link-lib=user32 `
+            --link-lib=advapi32 `
+            --link-lib=shell32 `
+            --link-lib=ws2_32 `
+            --link-lib=iphlpapi `
+            --link-lib=bcrypt `
+            --link-lib=msvcp140
         shell: pwsh
 
       - name: Package artifact (POSIX)

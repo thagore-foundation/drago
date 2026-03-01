@@ -15,9 +15,9 @@ trap cleanup EXIT
 echo "installing thagc ${THAGC_TAG} (${CHANNEL})"
 curl -fsSL "${SCRIPT_URL}" -o "${TMP_SCRIPT}"
 if [[ -n "${ARCH}" ]]; then
-  bash "${TMP_SCRIPT}" --tag "${THAGC_TAG}" --channel "${CHANNEL}" --arch "${ARCH}" --force
+  bash "${TMP_SCRIPT}" --tag "${THAGC_TAG}" --channel "${CHANNEL}" --arch "${ARCH}" --without-drago --force
 else
-  bash "${TMP_SCRIPT}" --tag "${THAGC_TAG}" --channel "${CHANNEL}" --force
+  bash "${TMP_SCRIPT}" --tag "${THAGC_TAG}" --channel "${CHANNEL}" --without-drago --force
 fi
 
 if [[ -n "${GITHUB_PATH:-}" ]]; then
