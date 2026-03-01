@@ -29,7 +29,7 @@ func usage():
   print("  add <package> [version]")
   print("  remove <package>")
   print("  install")
-  print("  update [dependency|drago|thagc]")
+  print("  update [dependency|drago|thagc|toolchain|all]")
   print("  publish")
   print("  fmt")
   print("  check")
@@ -508,7 +508,18 @@ func enforce_mode_guards(cmd: ptr, arg1: ptr, locked: i32, frozen: i32, offline:
       return false
   return true
 
-func thagup_args_for_target(target: ptr) -> ptr:
+func sh_quote(value: ptr) -> ptr:
+  let escaped = str.replace(value, "\\", "\\\\")
+  escaped = str.replace(escaped, "\"", "\\\"")
+  escaped = str.replace(escaped, "$", "\\$")
+  escaped = str.replace(escaped, "`", "\\`")
+  return str.concat("\"", str.concat(escaped, "\""))
+
+func ps_quote(value: ptr) -> ptr:
+  let escaped = str.replace(value, "'", "''")
+  return str.concat("'", str.concat(escaped, "'"))
+
+func thagup_posix_args_for_target(target: ptr) -> ptr:
   let args = str.concat("", " --force")
   let thagc_tag = process.env("DRAGO_THAGC_TAG")
   let drago_tag = process.env("DRAGO_DRAGO_TAG")
@@ -516,17 +527,38 @@ func thagup_args_for_target(target: ptr) -> ptr:
   let arch = process.env("DRAGO_ARCH")
   let dry_run = process.env("DRAGO_UPDATE_DRY_RUN")
   if (str.str_eq(thagc_tag, "") == false):
-    args = str.concat(args, str.concat(" --tag ", thagc_tag))
+    args = str.concat(args, str.concat(" --tag ", sh_quote(thagc_tag)))
   if (str.str_eq(drago_tag, "") == false):
-    args = str.concat(args, str.concat(" --drago-tag ", drago_tag))
+    args = str.concat(args, str.concat(" --drago-tag ", sh_quote(drago_tag)))
   if (str.str_eq(channel, "") == false):
-    args = str.concat(args, str.concat(" --channel ", channel))
+    args = str.concat(args, str.concat(" --channel ", sh_quote(channel)))
   if (str.str_eq(arch, "") == false):
-    args = str.concat(args, str.concat(" --arch ", arch))
+    args = str.concat(args, str.concat(" --arch ", sh_quote(arch)))
   if (str.str_eq(dry_run, "1")):
     args = str.concat(args, " --dry-run")
   if (str.str_eq(target, "thagc")):
     args = str.concat(args, " --without-drago")
+  return args
+
+func thagup_windows_args_for_target(target: ptr) -> ptr:
+  let args = str.concat("", " -Force")
+  let thagc_tag = process.env("DRAGO_THAGC_TAG")
+  let drago_tag = process.env("DRAGO_DRAGO_TAG")
+  let channel = process.env("DRAGO_CHANNEL")
+  let arch = process.env("DRAGO_ARCH")
+  let dry_run = process.env("DRAGO_UPDATE_DRY_RUN")
+  if (str.str_eq(thagc_tag, "") == false):
+    args = str.concat(args, str.concat(" -Tag ", ps_quote(thagc_tag)))
+  if (str.str_eq(drago_tag, "") == false):
+    args = str.concat(args, str.concat(" -DragoTag ", ps_quote(drago_tag)))
+  if (str.str_eq(channel, "") == false):
+    args = str.concat(args, str.concat(" -Channel ", ps_quote(channel)))
+  if (str.str_eq(arch, "") == false):
+    args = str.concat(args, str.concat(" -Arch ", ps_quote(arch)))
+  if (str.str_eq(dry_run, "1")):
+    args = str.concat(args, " -DryRun")
+  if (str.str_eq(target, "thagc")):
+    args = str.concat(args, " -WithoutDrago")
   return args
 
 func handle_toolchain_update(target: ptr, quiet: i32, offline: i32) -> bool:
@@ -540,12 +572,16 @@ func handle_toolchain_update(target: ptr, quiet: i32, offline: i32) -> bool:
     target_text = str.concat("", "drago")
   out.print_action("🛠", str.concat("Updating ", target), quiet)
   let os_name = process.env("OS")
+  let cmd = str.concat("", "")
   if (str.str_eq(os_name, "Windows_NT")):
-    out.print_error("self-update via thagup is currently implemented for POSIX shells in drago")
-    return false
-  let url = str.concat("https:", str.concat("/", "/raw.githubusercontent.com/thagore-foundation/thagore/main/tooling/release/thagup.sh"))
-  let cmd = str.concat("curl -fsSL \"", str.concat(url, "\" | bash -s --"))
-  cmd = str.concat(cmd, thagup_args_for_target(target_text))
+    let url_ps = str.concat("https:", str.concat("/", "/raw.githubusercontent.com/thagore-foundation/thagore/main/tooling/release/thagup.ps1"))
+    cmd = str.concat("powershell -NoProfile -ExecutionPolicy Bypass -Command \"$u='", str.concat(url_ps, "';$t=Join-Path $env:TEMP 'thagup.ps1';Invoke-WebRequest -Uri $u -OutFile $t;& powershell -NoProfile -ExecutionPolicy Bypass -File $t"))
+    cmd = str.concat(cmd, thagup_windows_args_for_target(target_text))
+    cmd = str.concat(cmd, "\"")
+  else:
+    let url = str.concat("https:", str.concat("/", "/raw.githubusercontent.com/thagore-foundation/thagore/main/tooling/release/thagup.sh"))
+    cmd = str.concat("curl -fsSL \"", str.concat(url, "\" | bash -s --"))
+    cmd = str.concat(cmd, thagup_posix_args_for_target(target_text))
   let rc = process.run(cmd)
   if (rc != 0):
     out.print_summary_fail("Self-update failed")

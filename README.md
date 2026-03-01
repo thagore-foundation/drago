@@ -28,7 +28,7 @@ $THAGC build src/main.tg -o drago.bin
 - `drago add <package> [version]`
 - `drago remove <package>`
 - `drago install`
-- `drago update [dependency|drago|thagc]`
+- `drago update [dependency|drago|thagc|toolchain|all]`
 - `drago publish`
 - `drago fmt`
 - `drago check`
@@ -51,6 +51,7 @@ $THAGC build src/main.tg -o drago.bin
 `drago update <dependency>` updates one dependency (instead of all selected dependencies).
 `drago update drago` (or `drago update toolchain` / `drago update all`) runs `thagup` in default mode and updates both `drago` and `thagc`.
 `drago update thagc` runs `thagup --without-drago` and updates `thagc` only.
+Self-update uses `thagup.sh` on POSIX and `thagup.ps1` on Windows.
 `--locked` blocks commands that would modify `drago.lock` and fails if lockfile is out of sync for build/read commands.
 `--frozen` implies lockfile immutability and requires offline mode (`--offline` or `DRAGO_OFFLINE=1`) for networked commands.
 `--offline` disables network fetches for registry/package resolution and relies on local cache/file-based registry.
