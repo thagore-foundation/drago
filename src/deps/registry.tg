@@ -55,7 +55,19 @@ pub func registry_base() -> ptr:
 pub func registry_url(file_name: ptr) -> ptr:
   return str.concat(registry_base(), str.concat("/", file_name))
 
-pub func fetch_url_text(url: ptr) -> ptr:
+func is_file_url(url: ptr) -> i32:
+  let file_prefix = str.concat("file:", str.concat("/", "/"))
+  if (str.str_starts(url, file_prefix)):
+    return 1
+  return 0
+
+pub func fetch_url_text(url: ptr, offline_mode: i32) -> ptr:
+  let offline = offline_mode
+  if (str.str_eq(process.env("DRAGO_OFFLINE"), "1")):
+    offline = 1
+  if (offline != 0):
+    if (is_file_url(url) == 0):
+      return str.concat("", "")
   http.http_get(url, 5000)
   let null_dev = str.concat("", "/dev/null")
   let os_name = process.env("OS")
@@ -109,14 +121,14 @@ pub func parse_package_from_yaml(pkg: ptr, tier: ptr, yaml_text: ptr) -> ptr:
     i = i + 1
   return info_make(0, pkg, str.concat("", ""), str.concat("", ""), str.concat("", ""), tier)
 
-pub func find_package(pkg: ptr) -> ptr:
-  let auth = parse_package_from_yaml(pkg, "authentic", fetch_url_text(registry_url("authentic.yaml")))
+pub func find_package(pkg: ptr, offline_mode: i32) -> ptr:
+  let auth = parse_package_from_yaml(pkg, "authentic", fetch_url_text(registry_url("authentic.yaml"), offline_mode))
   if (str.str_eq(info_found(auth), "1")):
     return auth
-  let comm = parse_package_from_yaml(pkg, "community", fetch_url_text(registry_url("community.yaml")))
+  let comm = parse_package_from_yaml(pkg, "community", fetch_url_text(registry_url("community.yaml"), offline_mode))
   if (str.str_eq(info_found(comm), "1")):
     return comm
-  let pub = parse_package_from_yaml(pkg, "publish", fetch_url_text(registry_url("publish.yaml")))
+  let pub = parse_package_from_yaml(pkg, "publish", fetch_url_text(registry_url("publish.yaml"), offline_mode))
   if (str.str_eq(info_found(pub), "1")):
     return pub
   return info_make(0, pkg, str.concat("", ""), str.concat("", ""), str.concat("", ""), "unregistered")
@@ -129,8 +141,8 @@ pub func tier_warning(info: ptr):
   if (str.str_eq(tier, "unregistered")):
     print(str.concat("⚠ package ", str.concat(name, " is unregistered")))
 
-pub func reg_add_dependency(project_root: ptr, pkg: ptr, requested_version: ptr) -> i32:
-  let info = find_package(pkg)
+pub func reg_add_dependency(project_root: ptr, pkg: ptr, requested_version: ptr, offline_mode: i32) -> i32:
+  let info = find_package(pkg, offline_mode)
   let dep_version = info_version(info)
   let dep_repo = info_repo(info)
   let dep_checksum = info_checksum(info)
@@ -144,7 +156,7 @@ pub func reg_add_dependency(project_root: ptr, pkg: ptr, requested_version: ptr)
       return 0
 
   tier_warning(info)
-  if (downloader.install_package(pkg, dep_version, dep_repo, dep_checksum) == 0):
+  if (downloader.install_package(pkg, dep_version, dep_repo, dep_checksum, offline_mode) == 0):
     return 0
 
   let dep_spec = str.concat("\"", str.concat(dep_version, "\""))
@@ -154,7 +166,7 @@ pub func reg_add_dependency(project_root: ptr, pkg: ptr, requested_version: ptr)
     return 0
   return 1
 
-pub func reg_install_all(project_root: ptr, feature_csv: ptr, all_features: i32, no_default_features: i32) -> i32:
+pub func reg_install_all(project_root: ptr, feature_csv: ptr, all_features: i32, no_default_features: i32, offline_mode: i32) -> i32:
   let dependencies = manifest.load_dependencies_for_features(project_root, feature_csv, all_features, no_default_features)
   let i: i64 = 0
   let n = list.list_count(dependencies)
@@ -163,12 +175,12 @@ pub func reg_install_all(project_root: ptr, feature_csv: ptr, all_features: i32,
     let name = manifest.dependency_name(dep)
     let spec = manifest.dependency_spec(dep)
     let clean = utils.strip_quotes(spec)
-    if (reg_add_dependency(project_root, name, clean) == 0):
+    if (reg_add_dependency(project_root, name, clean, offline_mode) == 0):
       return 0
     i = i + 1
   return 1
 
-pub func reg_update_all(project_root: ptr, feature_csv: ptr, all_features: i32, no_default_features: i32, only_dep: ptr) -> i32:
+pub func reg_update_all(project_root: ptr, feature_csv: ptr, all_features: i32, no_default_features: i32, only_dep: ptr, offline_mode: i32) -> i32:
   let dependencies = manifest.load_dependencies_for_features(project_root, feature_csv, all_features, no_default_features)
   if (utils.is_empty(only_dep) == false):
     dependencies = manifest.load_dependencies(project_root)
@@ -183,9 +195,9 @@ pub func reg_update_all(project_root: ptr, feature_csv: ptr, all_features: i32, 
         i = i + 1
         continue
       matched = 1
-    let info = find_package(name)
+    let info = find_package(name, offline_mode)
     if (str.str_eq(info_found(info), "1")):
-      if (reg_add_dependency(project_root, name, info_version(info)) == 0):
+      if (reg_add_dependency(project_root, name, info_version(info), offline_mode) == 0):
         return 0
     i = i + 1
   if (utils.is_empty(only_dep) == false):
@@ -215,8 +227,8 @@ pub func reg_publish_project(project_root: ptr) -> i32:
   print("publish request created")
   return 1
 
-pub func reg_audit_dependencies(project_root: ptr) -> i32:
-  let issues = fetch_url_text(registry_url("known-issues.yaml"))
+pub func reg_audit_dependencies(project_root: ptr, offline_mode: i32) -> i32:
+  let issues = fetch_url_text(registry_url("known-issues.yaml"), offline_mode)
   let lines = lockfile.load_lines(project_root)
   let i: i64 = 0
   let n = list.list_count(lines)

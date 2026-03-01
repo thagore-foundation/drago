@@ -40,6 +40,7 @@ $THAGC build src/main.tg -o drago.bin
 - Global build flags:
   - `--locked`
   - `--frozen`
+  - `--offline`
   - `-p, --package <name>`
   - `--features <f1,f2>`
   - `--all-features`
@@ -48,8 +49,9 @@ $THAGC build src/main.tg -o drago.bin
 `--features` / `--all-features` / `--no-default-features` are supported in `build`, `run`, `check`, `test`, `install`, `update`, `tree`, `why`, and `outdated`.
 `--package` selects one workspace member by package name or member path.
 `drago update <dependency>` updates one dependency (instead of all selected dependencies).
-`--locked` blocks commands that would modify `drago.lock`.
-`--frozen` implies lockfile immutability and requires `DRAGO_OFFLINE=1` for networked commands.
+`--locked` blocks commands that would modify `drago.lock` and fails if lockfile is out of sync for build/read commands.
+`--frozen` implies lockfile immutability and requires offline mode (`--offline` or `DRAGO_OFFLINE=1`) for networked commands.
+`--offline` disables network fetches for registry/package resolution and relies on local cache/file-based registry.
 
 ## Workspace
 

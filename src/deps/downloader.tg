@@ -37,7 +37,7 @@ pub func package_tarball_fallback_url(repo: ptr, version: ptr) -> ptr:
   let base = str.concat("https:", str.concat("/", "/github.com/"))
   return str.concat(base, str.concat(repo, str.concat("/archive/refs/tags/", str.concat(version, ".tar.gz"))))
 
-pub func install_package(name: ptr, version: ptr, repo: ptr, checksum: ptr) -> i32:
+pub func install_package(name: ptr, version: ptr, repo: ptr, checksum: ptr, offline_mode: i32) -> i32:
   if (str.str_eq(str.from_int(cache.ensure_layout()), "0")):
     print("ERROR: cannot prepare cache directories")
     return 0
@@ -46,7 +46,10 @@ pub func install_package(name: ptr, version: ptr, repo: ptr, checksum: ptr) -> i
     return 1
 
   let offline = process.env("DRAGO_OFFLINE")
+  let offline_enabled = offline_mode
   if (str.str_eq(offline, "1")):
+    offline_enabled = 1
+  if (offline_enabled != 0):
     print(str.concat("ERROR: package missing in offline mode: ", str.concat(name, str.concat("@", version))))
     return 0
 

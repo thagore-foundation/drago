@@ -20,7 +20,7 @@ import src.project.scaffold as scaffold
 import src.test.runner as test_runner
 
 func usage():
-  print("drago <command> [args] [--quiet] [--verbose] [--locked|--frozen] [-p|--package <name>] [--features <f1,f2>] [--all-features] [--no-default-features]")
+  print("drago <command> [args] [--quiet] [--verbose] [--locked|--frozen] [--offline] [-p|--package <name>] [--features <f1,f2>] [--all-features] [--no-default-features]")
   print("commands:")
   print("  new <name>")
   print("  build")
@@ -130,6 +130,58 @@ func lock_version(lines: ptr, dep_name: ptr) -> ptr:
       return lockfile.pkg_version(line)
     i = i + 1
   return str.concat("", "")
+
+func command_requires_lock_consistency(cmd: ptr) -> i32:
+  if (str.str_eq(cmd, "build")):
+    return 1
+  if (str.str_eq(cmd, "run")):
+    return 1
+  if (str.str_eq(cmd, "test")):
+    return 1
+  if (str.str_eq(cmd, "check")):
+    return 1
+  if (str.str_eq(cmd, "tree")):
+    return 1
+  if (str.str_eq(cmd, "why")):
+    return 1
+  if (str.str_eq(cmd, "outdated")):
+    return 1
+  return 0
+
+func lock_consistent_for_member(member_root: ptr, features: ptr, all_features: i32, no_default_features: i32, quiet: i32) -> i32:
+  let deps = manifest.load_dependencies_for_features(member_root, features, all_features, no_default_features)
+  let lock_lines = lockfile.load_lines(member_root)
+  let ok = 1
+  let i: i64 = 0
+  let n = list.list_count(deps)
+  while (i < n):
+    let dep = list.list_get(deps, i)
+    let dep_name = manifest.dependency_name(dep)
+    let dep_ver = dep_version_text(dep)
+    let locked_ver = lock_version(lock_lines, dep_name)
+    if (utils.is_empty(locked_ver)):
+      out.print_warning(str.concat(project_name(member_root), str.concat(": missing in drago.lock -> ", dep_name)), quiet)
+      ok = 0
+      i = i + 1
+      continue
+    if (str.str_eq(dep_ver, locked_ver) == false):
+      out.print_warning(str.concat(project_name(member_root), str.concat(": lock mismatch for ", str.concat(dep_name, str.concat(" (manifest ", str.concat(dep_ver, str.concat(", lock ", str.concat(locked_ver, ")"))))))), quiet)
+      ok = 0
+    i = i + 1
+  return ok
+
+func verify_locked_dependencies(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32) -> i32:
+  let members = selected_member_roots(root, quiet, package_name)
+  if (list.list_count(members) == 0):
+    return 0
+  let ok = 1
+  let i: i64 = 0
+  let n = list.list_count(members)
+  while (i < n):
+    if (lock_consistent_for_member(list.list_get(members, i), features, all_features, no_default_features, quiet) == 0):
+      ok = 0
+    i = i + 1
+  return ok
 
 func path_contains_node(path_text: ptr, name: ptr) -> i32:
   let nodes = str.split(path_text, " > ")
@@ -322,7 +374,7 @@ func command_may_use_network(cmd: ptr) -> i32:
     return 1
   return 0
 
-func enforce_mode_guards(cmd: ptr, locked: i32, frozen: i32) -> bool:
+func enforce_mode_guards(cmd: ptr, locked: i32, frozen: i32, offline: i32) -> bool:
   let effective_locked = locked
   if (frozen != 0):
     effective_locked = 1
@@ -332,12 +384,19 @@ func enforce_mode_guards(cmd: ptr, locked: i32, frozen: i32) -> bool:
       return false
   if (frozen != 0):
     if (command_may_use_network(cmd) != 0):
-      if (str.str_eq(process.env("DRAGO_OFFLINE"), "1") == false):
-        out.print_error("--frozen requires DRAGO_OFFLINE=1 for networked commands")
+      let effective_offline = offline
+      if (str.str_eq(process.env("DRAGO_OFFLINE"), "1")):
+        effective_offline = 1
+      if (effective_offline == 0):
+        out.print_error("--frozen requires --offline (or DRAGO_OFFLINE=1) for networked commands")
         return false
+  if (offline != 0):
+    if (str.str_eq(cmd, "publish")):
+      out.print_error("--offline disallows publish")
+      return false
   return true
 
-func handle_outdated(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32) -> bool:
+func handle_outdated(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32, offline: i32) -> bool:
   let members = selected_member_roots(root, quiet, package_name)
   let n = list.list_count(members)
   if (n == 0):
@@ -357,7 +416,7 @@ func handle_outdated(root: ptr, quiet: i32, package_name: ptr, features: ptr, al
       if (utils.is_empty(current)):
         j = j + 1
         continue
-      let info = registry.find_package(dep_name)
+      let info = registry.find_package(dep_name, offline)
       if (str.str_eq(registry.info_found(info), "1")):
         let latest = registry.info_version(info)
         if (str.str_eq(latest, "") == false):
@@ -492,7 +551,7 @@ func handle_run(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_fea
     return true
   return false
 
-func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32) -> bool:
+func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32, offline: i32) -> bool:
   if (utils.is_empty(pkg)):
     out.print_error("add requires package name")
     return false
@@ -503,7 +562,7 @@ func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32) -> bool:
   else:
     title = str.concat(pkg, str.concat("@", wanted))
   out.print_action("📦", str.concat("Adding ", title), quiet)
-  let info = registry.find_package(pkg)
+  let info = registry.find_package(pkg, offline)
   let tier = registry.info_tier(info)
   let found = registry.info_found(info)
   if (str.str_eq(found, "1")):
@@ -520,7 +579,7 @@ func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32) -> bool:
   if (utils.is_empty(wanted)):
     wanted = str.concat("", "")
   let started = time.now_ms()
-  let add_rc = registry.reg_add_dependency(root, pkg, wanted)
+  let add_rc = registry.reg_add_dependency(root, pkg, wanted, offline)
   if (add_rc == 0):
     out.print_summary_fail("Add failed")
     return false
@@ -547,7 +606,7 @@ func handle_remove(root: ptr, pkg: ptr, quiet: i32) -> bool:
   out.print_success(str.concat("Removed ", pkg), quiet)
   return true
 
-func handle_install(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32) -> bool:
+func handle_install(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32, offline: i32) -> bool:
   let members = selected_member_roots(root, quiet, package_name)
   let n = list.list_count(members)
   if (n == 0):
@@ -555,14 +614,14 @@ func handle_install(root: ptr, quiet: i32, package_name: ptr, features: ptr, all
   out.print_action("📦", "Installing dependencies", quiet)
   let i: i64 = 0
   while (i < n):
-    let install_rc = registry.reg_install_all(list.list_get(members, i), features, all_features, no_default_features)
+    let install_rc = registry.reg_install_all(list.list_get(members, i), features, all_features, no_default_features, offline)
     if (install_rc == 0):
       return false
     i = i + 1
   out.print_summary_ok("Dependencies installed", quiet)
   return true
 
-func handle_update(root: ptr, dep_name: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32) -> bool:
+func handle_update(root: ptr, dep_name: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32, offline: i32) -> bool:
   let members = selected_member_roots(root, quiet, package_name)
   let n = list.list_count(members)
   if (n == 0):
@@ -570,7 +629,7 @@ func handle_update(root: ptr, dep_name: ptr, quiet: i32, package_name: ptr, feat
   out.print_action("📦", "Updating dependencies", quiet)
   let i: i64 = 0
   while (i < n):
-    let update_rc = registry.reg_update_all(list.list_get(members, i), features, all_features, no_default_features, dep_name)
+    let update_rc = registry.reg_update_all(list.list_get(members, i), features, all_features, no_default_features, dep_name, offline)
     if (update_rc == 0):
       return false
     i = i + 1
@@ -643,9 +702,9 @@ func handle_publish(root: ptr, quiet: i32) -> bool:
   out.print_action("📦", "Publishing package metadata", quiet)
   return registry.reg_publish_project(root) != 0
 
-func handle_audit(root: ptr, quiet: i32) -> bool:
+func handle_audit(root: ptr, quiet: i32, offline: i32) -> bool:
   out.print_action("📦", "Auditing dependencies", quiet)
-  let ok = registry.reg_audit_dependencies(root)
+  let ok = registry.reg_audit_dependencies(root, offline)
   if (ok != 0):
     out.print_summary_ok("No known issues found", quiet)
   else:
@@ -665,13 +724,34 @@ func main() -> i32:
   let no_default_features = parser.parsed_no_default_features(parsed)
   let locked = parser.parsed_locked(parsed)
   let frozen = parser.parsed_frozen(parsed)
+  let offline_flag = parser.parsed_offline(parsed)
+  let offline = offline_flag
+  if (str.str_eq(process.env("DRAGO_OFFLINE"), "1")):
+    offline = 1
   let root = project_root()
   if (verbose != 0):
     print(str.concat("drago root: ", root))
   if (str.str_eq(cmd, "help") == false):
     if (str.str_eq(cmd, "version") == false):
-      if (enforce_mode_guards(cmd, locked, frozen) == false):
+      if (enforce_mode_guards(cmd, locked, frozen, offline) == false):
         return 1
+      let effective_locked = locked
+      if (frozen != 0):
+        effective_locked = 1
+      if (effective_locked != 0):
+        if (command_requires_lock_consistency(cmd) != 0):
+          if (verify_locked_dependencies(root, quiet, package_name, features, all_features, no_default_features) == 0):
+            out.print_error("lockfile is out of sync (use install/update without --locked to refresh)")
+            return 1
+      if (offline != 0):
+        if (verbose != 0):
+          print("drago mode: offline")
+      if (frozen != 0):
+        if (verbose != 0):
+          print("drago mode: frozen")
+      if (locked != 0):
+        if (verbose != 0):
+          print("drago mode: locked")
 
   if (str.str_eq(cmd, "help")):
     usage()
@@ -706,7 +786,7 @@ func main() -> i32:
       return 0
     return 1
   if (str.str_eq(cmd, "add")):
-    if (handle_add(root, arg1, arg2, quiet)):
+    if (handle_add(root, arg1, arg2, quiet, offline)):
       return 0
     return 1
   if (str.str_eq(cmd, "remove")):
@@ -714,11 +794,11 @@ func main() -> i32:
       return 0
     return 1
   if (str.str_eq(cmd, "install")):
-    if (handle_install(root, quiet, package_name, features, all_features, no_default_features)):
+    if (handle_install(root, quiet, package_name, features, all_features, no_default_features, offline)):
       return 0
     return 1
   if (str.str_eq(cmd, "update")):
-    if (handle_update(root, arg1, quiet, package_name, features, all_features, no_default_features)):
+    if (handle_update(root, arg1, quiet, package_name, features, all_features, no_default_features, offline)):
       return 0
     return 1
   if (str.str_eq(cmd, "publish")):
@@ -738,7 +818,7 @@ func main() -> i32:
       return 0
     return 1
   if (str.str_eq(cmd, "audit")):
-    if (handle_audit(root, quiet)):
+    if (handle_audit(root, quiet, offline)):
       return 0
     return 1
   if (str.str_eq(cmd, "tree")):
@@ -750,7 +830,7 @@ func main() -> i32:
       return 0
     return 1
   if (str.str_eq(cmd, "outdated")):
-    if (handle_outdated(root, quiet, package_name, features, all_features, no_default_features)):
+    if (handle_outdated(root, quiet, package_name, features, all_features, no_default_features, offline)):
       return 0
     return 1
 

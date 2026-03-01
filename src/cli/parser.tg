@@ -59,6 +59,7 @@ pub func parse() -> ptr:
   let no_default_features = 0
   let locked = 0
   let frozen = 0
+  let offline = 0
   let seen_cmd = 0
 
   let i = 1
@@ -78,6 +79,10 @@ pub func parse() -> ptr:
       continue
     if (str.str_eq(a, "--frozen")):
       frozen = 1
+      i = i + 1
+      continue
+    if (str.str_eq(a, "--offline")):
+      offline = 1
       i = i + 1
       continue
     if (str.str_eq(a, "-p")):
@@ -158,7 +163,10 @@ pub func parse() -> ptr:
   let fr = str.concat("", "0")
   if (frozen != 0):
     fr = str.concat("", "1")
-  return str.concat(kind, str.concat("|", str.concat(arg1, str.concat("|", str.concat(arg2, str.concat("|", str.concat(q, str.concat("|", str.concat(v, str.concat("|", str.concat(package_name, str.concat("|", str.concat(features, str.concat("|", str.concat(af, str.concat("|", str.concat(ndf, str.concat("|", str.concat(lk, str.concat("|", fr))))))))))))))))))))
+  let of = str.concat("", "0")
+  if (offline != 0):
+    of = str.concat("", "1")
+  return str.concat(kind, str.concat("|", str.concat(arg1, str.concat("|", str.concat(arg2, str.concat("|", str.concat(q, str.concat("|", str.concat(v, str.concat("|", str.concat(package_name, str.concat("|", str.concat(features, str.concat("|", str.concat(af, str.concat("|", str.concat(ndf, str.concat("|", str.concat(lk, str.concat("|", str.concat(fr, str.concat("|", of))))))))))))))))))))))
 
 pub func part(parsed: ptr, idx: i64) -> ptr:
   let parts = str.split(parsed, "|")
@@ -208,5 +216,10 @@ pub func parsed_locked(parsed: ptr) -> i32:
 
 pub func parsed_frozen(parsed: ptr) -> i32:
   if (str.str_eq(part(parsed, 10), "1")):
+    return 1
+  return 0
+
+pub func parsed_offline(parsed: ptr) -> i32:
+  if (str.str_eq(part(parsed, 11), "1")):
     return 1
   return 0
