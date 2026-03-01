@@ -23,6 +23,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install LLVM 21 runtime (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget lsb-release gnupg software-properties-common
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 21
+          echo "LD_LIBRARY_PATH=/usr/lib/llvm-21/lib:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+        shell: bash
+
+      - name: Install LLVM 21 runtime (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm@21 || brew install llvm
+          LLVM_PREFIX="$(brew --prefix llvm@21 2>/dev/null || brew --prefix llvm)"
+          mkdir -p /opt/homebrew/opt
+          if [ ! -e /opt/homebrew/opt/llvm@21 ]; then
+            ln -s "${LLVM_PREFIX}" /opt/homebrew/opt/llvm@21
+          fi
+          echo "${LLVM_PREFIX}/bin" >> "$GITHUB_PATH"
+          echo "DYLD_LIBRARY_PATH=${LLVM_PREFIX}/lib:${DYLD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+        shell: bash
+
+      - name: Install LLVM 21 runtime (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install llvm --version=21.1.0 -y
+          if (!(Test-Path "C:\Program Files\LLVM\bin")) {
+            choco install llvm -y
+          }
+          "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: pwsh
+
       - name: Install thagc (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
