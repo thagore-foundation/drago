@@ -44,6 +44,7 @@ jobs:
 
       - name: Smoke test
         run: |
+          mkdir -p target
           ./drago.bin check
           ./drago.bin test
         shell: bash
