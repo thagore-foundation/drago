@@ -26,10 +26,14 @@ func usage():
   print("  build")
   print("  run")
   print("  test")
-  print("  add <package> [version]")
+  print("  add <package> [version]                  add and install one dependency")
   print("  remove <package>")
-  print("  install")
-  print("  update [dependency|drago|thagc|toolchain|all]")
+  print("  install                                  install all dependencies in manifest")
+  print("  install <package> [version]              install one dependency (npm-style alias of add)")
+  print("  update                                   update all dependencies")
+  print("  update <dependency>                      update one dependency")
+  print("  update drago|toolchain|all               self-update drago + thagc")
+  print("  update thagc                             self-update thagc only")
   print("  publish")
   print("  fmt")
   print("  check")
@@ -967,7 +971,7 @@ func main() -> i32:
     usage()
     return 0
   if (str.str_eq(cmd, "version")):
-    print("drago 1.0.0")
+    print(str.concat("drago ", manifest.load_version(root)))
     return 0
   if (str.str_eq(cmd, "new")):
     if (scaffold.create_project(arg1) != 0):
@@ -1004,6 +1008,10 @@ func main() -> i32:
       return 0
     return 1
   if (str.str_eq(cmd, "install")):
+    if (utils.is_empty(arg1) == false):
+      if (handle_add(root, arg1, arg2, quiet, package_name, offline)):
+        return 0
+      return 1
     if (handle_install(root, quiet, package_name, features, all_features, no_default_features, offline)):
       return 0
     return 1

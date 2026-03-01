@@ -28,6 +28,7 @@ $THAGC build src/main.tg -o drago.bin
 - `drago add <package> [version]`
 - `drago remove <package>`
 - `drago install`
+- `drago install <package> [version]`
 - `drago update [dependency|drago|thagc|toolchain|all]`
 - `drago publish`
 - `drago fmt`
@@ -48,6 +49,8 @@ $THAGC build src/main.tg -o drago.bin
 
 `--features` / `--all-features` / `--no-default-features` are supported in `build`, `run`, `check`, `test`, `install`, `update`, `tree`, `why`, and `outdated`.
 `--package` selects one workspace member by package name or member path.
+`drago install` installs all dependencies declared in `drago.toml`.
+`drago install <package> [version]` is an npm-style alias of `drago add <package> [version]` (add + install one dependency).
 `drago update <dependency>` updates one dependency (instead of all selected dependencies).
 `drago update drago` (or `drago update toolchain` / `drago update all`) runs `thagup` in default mode and updates both `drago` and `thagc`.
 `drago update thagc` runs `thagup --without-drago` and updates `thagc` only.
