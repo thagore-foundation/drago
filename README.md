@@ -38,6 +38,8 @@ $THAGC build src/main.tg -o drago.bin
 - `drago why <package>`
 - `drago outdated`
 - Global build flags:
+  - `--locked`
+  - `--frozen`
   - `-p, --package <name>`
   - `--features <f1,f2>`
   - `--all-features`
@@ -46,6 +48,8 @@ $THAGC build src/main.tg -o drago.bin
 `--features` / `--all-features` / `--no-default-features` are supported in `build`, `run`, `check`, `test`, `install`, `update`, `tree`, `why`, and `outdated`.
 `--package` selects one workspace member by package name or member path.
 `drago update <dependency>` updates one dependency (instead of all selected dependencies).
+`--locked` blocks commands that would modify `drago.lock`.
+`--frozen` implies lockfile immutability and requires `DRAGO_OFFLINE=1` for networked commands.
 
 ## Workspace
 
@@ -59,6 +63,7 @@ members = ["crates/a", "crates/b"]
 - `drago build` / `drago check` / `drago test` at workspace root run for all members.
 - `drago run` at workspace root requires exactly one member (otherwise it is ambiguous).
 - Use `--package <name>` to target one member for `build/run/test/check/install/update/tree/why/outdated`.
+- `why` now reports transitive dependency chains when package sources are available in local cache.
 
 ## Optional Dependencies
 

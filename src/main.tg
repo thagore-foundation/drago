@@ -20,7 +20,7 @@ import src.project.scaffold as scaffold
 import src.test.runner as test_runner
 
 func usage():
-  print("drago <command> [args] [--quiet] [--verbose] [-p|--package <name>] [--features <f1,f2>] [--all-features] [--no-default-features]")
+  print("drago <command> [args] [--quiet] [--verbose] [--locked|--frozen] [-p|--package <name>] [--features <f1,f2>] [--all-features] [--no-default-features]")
   print("commands:")
   print("  new <name>")
   print("  build")
@@ -131,6 +131,95 @@ func lock_version(lines: ptr, dep_name: ptr) -> ptr:
     i = i + 1
   return str.concat("", "")
 
+func path_contains_node(path_text: ptr, name: ptr) -> i32:
+  let nodes = str.split(path_text, " > ")
+  let i: i64 = 0
+  let n = list.list_count(nodes)
+  while (i < n):
+    if (str.str_eq(str.trim(list.list_get(nodes, i)), name)):
+      return 1
+    i = i + 1
+  return 0
+
+func stack_entry(path_text: ptr, dep_name: ptr, dep_version: ptr, depth: i64) -> ptr:
+  let out = str.concat(path_text, "|")
+  out = str.concat(out, dep_name)
+  out = str.concat(out, "|")
+  out = str.concat(out, dep_version)
+  out = str.concat(out, "|")
+  out = str.concat(out, str.from_int(depth))
+  return out
+
+func stack_path_text(entry: ptr) -> ptr:
+  let parts = str.split(entry, "|")
+  if (list.list_count(parts) >= 1):
+    return list.list_get(parts, 0)
+  return str.concat("", "")
+
+func stack_dep_name(entry: ptr) -> ptr:
+  let parts = str.split(entry, "|")
+  if (list.list_count(parts) >= 2):
+    return list.list_get(parts, 1)
+  return str.concat("", "")
+
+func stack_dep_version(entry: ptr) -> ptr:
+  let parts = str.split(entry, "|")
+  if (list.list_count(parts) >= 3):
+    return list.list_get(parts, 2)
+  return str.concat("", "")
+
+func stack_depth(entry: ptr) -> i64:
+  let parts = str.split(entry, "|")
+  if (list.list_count(parts) >= 4):
+    return str.to_int(list.list_get(parts, 3))
+  let zero: i64 = 0
+  return zero
+
+func cached_dependency_lines(dep_name: ptr, dep_version: ptr) -> ptr:
+  let out = list.list_new()
+  if (utils.is_empty(dep_name)):
+    return out
+  if (utils.is_empty(dep_version)):
+    return out
+  let dep_root = cache.package_dir(dep_name, dep_version)
+  if (fs.exists(path.join(dep_root, "drago.toml")) == 0):
+    return out
+  return manifest.load_dependencies(dep_root)
+
+func find_transitive_chain(start_dep_name: ptr, start_dep_version: ptr, target_pkg: ptr) -> ptr:
+  let max_depth: i64 = 16
+  let stack = list.list_new()
+  list.list_append(stack, stack_entry(start_dep_name, start_dep_name, start_dep_version, 0))
+  while (list.list_count(stack) > 0):
+    let idx = list.list_count(stack) - 1
+    let cur_entry = list.list_get(stack, idx)
+    list.list_remove(stack, idx)
+    let cur_path = stack_path_text(cur_entry)
+    let cur_name = stack_dep_name(cur_entry)
+    let cur_version = stack_dep_version(cur_entry)
+    let cur_depth = stack_depth(cur_entry)
+    if (str.str_eq(cur_name, target_pkg)):
+      return cur_path
+    if (cur_depth >= max_depth):
+      continue
+    let children = cached_dependency_lines(cur_name, cur_version)
+    let i: i64 = 0
+    let n = list.list_count(children)
+    while (i < n):
+      let child_line = list.list_get(children, i)
+      let child_name = manifest.dependency_name(child_line)
+      let child_version = dep_version_text(child_line)
+      if (utils.is_empty(child_name)):
+        i = i + 1
+        continue
+      if (path_contains_node(cur_path, child_name) != 0):
+        i = i + 1
+        continue
+      let next_path = str.concat(cur_path, str.concat(" > ", child_name))
+      list.list_append(stack, stack_entry(next_path, child_name, child_version, cur_depth + 1))
+      i = i + 1
+  return str.concat("", "")
+
 func print_dependency_tree_for_member(member_root: ptr, features: ptr, all_features: i32, no_default_features: i32):
   let member_name = project_name(member_root)
   print(str.concat(member_name, ":"))
@@ -182,6 +271,7 @@ func handle_why(root: ptr, pkg: ptr, quiet: i32, package_name: ptr, features: pt
   while (i < n):
     let member_root = list.list_get(members, i)
     let deps = manifest.load_dependencies_for_features(member_root, features, all_features, no_default_features)
+    let locks = lockfile.load_lines(member_root)
     let j: i64 = 0
     let m = list.list_count(deps)
     while (j < m):
@@ -190,12 +280,62 @@ func handle_why(root: ptr, pkg: ptr, quiet: i32, package_name: ptr, features: pt
       if (str.str_eq(dep_name, pkg)):
         found = 1
         print(str.concat("  - ", str.concat(project_name(member_root), str.concat(" depends on ", str.concat(pkg, str.concat(" @", dep_version_text(dep)))))))
+        j = j + 1
+        continue
+      let dep_ver = lock_version(locks, dep_name)
+      if (utils.is_empty(dep_ver)):
+        dep_ver = dep_version_text(dep)
+      let chain = find_transitive_chain(dep_name, dep_ver, pkg)
+      if (utils.is_empty(chain) == false):
+        found = 1
+        print(str.concat("  - ", str.concat(project_name(member_root), str.concat(" depends on ", chain))))
       j = j + 1
     i = i + 1
   if (found != 0):
     return true
-  out.print_warning(str.concat("No direct dependency on ", pkg), quiet)
+  out.print_warning(str.concat("No dependency chain found for ", pkg), quiet)
   return false
+
+func command_mutates_lock(cmd: ptr) -> i32:
+  if (str.str_eq(cmd, "add")):
+    return 1
+  if (str.str_eq(cmd, "remove")):
+    return 1
+  if (str.str_eq(cmd, "install")):
+    return 1
+  if (str.str_eq(cmd, "update")):
+    return 1
+  return 0
+
+func command_may_use_network(cmd: ptr) -> i32:
+  if (str.str_eq(cmd, "add")):
+    return 1
+  if (str.str_eq(cmd, "install")):
+    return 1
+  if (str.str_eq(cmd, "update")):
+    return 1
+  if (str.str_eq(cmd, "outdated")):
+    return 1
+  if (str.str_eq(cmd, "publish")):
+    return 1
+  if (str.str_eq(cmd, "audit")):
+    return 1
+  return 0
+
+func enforce_mode_guards(cmd: ptr, locked: i32, frozen: i32) -> bool:
+  let effective_locked = locked
+  if (frozen != 0):
+    effective_locked = 1
+  if (effective_locked != 0):
+    if (command_mutates_lock(cmd) != 0):
+      out.print_error("--locked/--frozen disallow commands that modify drago.lock")
+      return false
+  if (frozen != 0):
+    if (command_may_use_network(cmd) != 0):
+      if (str.str_eq(process.env("DRAGO_OFFLINE"), "1") == false):
+        out.print_error("--frozen requires DRAGO_OFFLINE=1 for networked commands")
+        return false
+  return true
 
 func handle_outdated(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32) -> bool:
   let members = selected_member_roots(root, quiet, package_name)
@@ -523,9 +663,15 @@ func main() -> i32:
   let features = parser.parsed_features(parsed)
   let all_features = parser.parsed_all_features(parsed)
   let no_default_features = parser.parsed_no_default_features(parsed)
+  let locked = parser.parsed_locked(parsed)
+  let frozen = parser.parsed_frozen(parsed)
   let root = project_root()
   if (verbose != 0):
     print(str.concat("drago root: ", root))
+  if (str.str_eq(cmd, "help") == false):
+    if (str.str_eq(cmd, "version") == false):
+      if (enforce_mode_guards(cmd, locked, frozen) == false):
+        return 1
 
   if (str.str_eq(cmd, "help")):
     usage()
