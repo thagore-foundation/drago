@@ -26,11 +26,6 @@ jobs:
             platform: linux
             arch: aarch64
             bin_name: drago.bin
-          - runner: macos-13
-            platform: macos
-            arch: x86_64
-            bin_name: drago.bin
-            optional: true
           - runner: macos-14
             platform: macos
             arch: aarch64
