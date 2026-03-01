@@ -70,5 +70,6 @@ export DRAGO_REGISTRY_BASE="file:///media/lehungquangminh/QM_SSD/drago/registry"
   - Steps: provision LLVM 21, install `thagc` from release tag (`v1.0.0`), build `drago`, run `drago check` and `drago test`, upload platform artifacts.
 - `Drago Release` (`.github/workflows/release.yml`)
   - Trigger: tags `v*` (and manual dispatch).
-  - Build matrix: Linux x86_64/aarch64, macOS x86_64/aarch64, Windows x86_64/aarch64 (macOS x86_64 lane is non-blocking).
+  - Build matrix: Linux x86_64/aarch64, macOS x86_64/aarch64, Windows x86_64/aarch64.
+  - Non-blocking lanes: macOS x86_64/aarch64 and Windows x86_64.
   - Publish platform bundles + per-platform SHA256 manifests to GitHub Releases.
