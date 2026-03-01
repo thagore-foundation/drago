@@ -1,0 +1,79 @@
+name: Drago CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    env:
+      THAGC_TAG: v0.8.3
+      DRAGO_COLOR: never
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install thagc (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: |
+        chmod +x .github/scripts/install_thagc_posix.sh
+        .github/scripts/install_thagc_posix.sh "${THAGC_TAG}" stable
+      shell: bash
+
+      - name: Install thagc (Windows)
+      if: runner.os == 'Windows'
+      run: .github/scripts/install_thagc_windows.ps1 -Tag "${env:THAGC_TAG}" -Channel stable
+      shell: pwsh
+
+      - name: Verify toolchain
+      run: thagc --version
+
+      - name: Build drago (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: thagc build src/main.tg -o drago.bin
+      shell: bash
+
+      - name: Build drago (Windows)
+      if: runner.os == 'Windows'
+      run: thagc build src/main.tg -o drago.exe
+      shell: pwsh
+
+      - name: Smoke test (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: |
+        ./drago.bin check
+        ./drago.bin test
+      shell: bash
+
+      - name: Smoke test (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        .\drago.exe check
+        .\drago.exe test
+      shell: pwsh
+
+      - name: Upload artifact (Linux/macOS)
+      if: runner.os != 'Windows'
+      uses: actions/upload-artifact@v4
+      with:
+        name: drago-${{ runner.os }}-${{ runner.arch }}
+        path: drago.bin
+        if-no-files-found: error
+
+      - name: Upload artifact (Windows)
+      if: runner.os == 'Windows'
+      uses: actions/upload-artifact@v4
+      with:
+        name: drago-${{ runner.os }}-${{ runner.arch }}
+        path: drago.exe
+        if-no-files-found: error

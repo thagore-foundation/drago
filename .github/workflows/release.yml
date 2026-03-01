@@ -1,0 +1,94 @@
+name: Drago Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (for manual runs)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    env:
+      THAGC_TAG: v0.8.3
+      DRAGO_COLOR: never
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install thagc (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: |
+        chmod +x .github/scripts/install_thagc_posix.sh
+        .github/scripts/install_thagc_posix.sh "${THAGC_TAG}" stable
+      shell: bash
+
+      - name: Install thagc (Windows)
+      if: runner.os == 'Windows'
+      run: .github/scripts/install_thagc_windows.ps1 -Tag "${env:THAGC_TAG}" -Channel stable
+      shell: pwsh
+
+      - name: Build binary (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: |
+        thagc build src/main.tg -o drago.bin
+        mkdir -p dist
+        if [ "${{ runner.os }}" = "Linux" ]; then
+          tar -czf "dist/drago-${GITHUB_REF_NAME}-linux-${{ runner.arch }}.tar.gz" drago.bin README.md
+        else
+          tar -czf "dist/drago-${GITHUB_REF_NAME}-macos-${{ runner.arch }}.tar.gz" drago.bin README.md
+        fi
+      shell: bash
+
+      - name: Build binary (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        thagc build src/main.tg -o drago.exe
+        New-Item -ItemType Directory -Path dist -Force | Out-Null
+        Compress-Archive -Path drago.exe,README.md -DestinationPath "dist/drago-$env:GITHUB_REF_NAME-windows-${{ runner.arch }}.zip"
+      shell: pwsh
+
+      - name: Upload release bundle
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-${{ runner.os }}-${{ runner.arch }}
+        path: dist/*
+        if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Resolve release tag
+      id: tag
+      run: |
+        if [ -n "${{ github.event.inputs.tag || '' }}" ]; then
+          echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+        else
+          echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+        fi
+
+      - name: Create release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.tag.outputs.tag }}
+        files: dist/*
+        generate_release_notes: true

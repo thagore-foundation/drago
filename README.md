@@ -61,3 +61,13 @@ export DRAGO_REGISTRY_BASE="file:///media/lehungquangminh/QM_SSD/drago/registry"
 
 - No C/C++ sources in this repository.
 - Runtime, filesystem, process, TOML, HTTP operations are through Thagore stdlib wrappers.
+
+## Automation (GitHub Actions)
+
+- `Drago CI` (`.github/workflows/ci.yml`)
+  - Trigger: `push` to `main`, all pull requests.
+  - Matrix: Linux, macOS (ARM runner), Windows.
+  - Steps: install `thagc`, build `drago`, run `drago check` and `drago test`.
+- `Drago Release` (`.github/workflows/release.yml`)
+  - Trigger: tags `v*` (and manual dispatch).
+  - Build artifacts for Linux/macOS/Windows and publish them to GitHub Releases.
