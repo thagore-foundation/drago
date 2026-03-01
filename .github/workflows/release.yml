@@ -21,25 +21,42 @@ permissions:
 
 jobs:
   build:
-    name: Build release bundle (${{ matrix.label }})
-    runs-on: ${{ matrix.os }}
+    name: Build release bundle (${{ matrix.platform }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    continue-on-error: ${{ matrix.optional || false }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            label: Linux x86_64
-            archive_suffix: linux-x86_64
+          - runner: ubuntu-latest
+            platform: linux
+            arch: x86_64
             archive_ext: tar.gz
             bin_name: drago.bin
-          - os: macos-14
-            label: macOS arm64
-            archive_suffix: macos-arm64
+          - runner: ubuntu-24.04-arm
+            platform: linux
+            arch: aarch64
             archive_ext: tar.gz
             bin_name: drago.bin
-          - os: windows-2022
-            label: Windows x86_64
-            archive_suffix: windows-x86_64
+          - runner: macos-13
+            platform: macos
+            arch: x86_64
+            archive_ext: tar.gz
+            bin_name: drago.bin
+            optional: true
+          - runner: macos-14
+            platform: macos
+            arch: aarch64
+            archive_ext: tar.gz
+            bin_name: drago.bin
+          - runner: windows-2022
+            platform: windows
+            arch: x86_64
+            archive_ext: zip
+            bin_name: drago.exe
+          - runner: windows-11-arm
+            platform: windows
+            arch: aarch64
             archive_ext: zip
             bin_name: drago.exe
     env:
@@ -57,28 +74,31 @@ jobs:
           fi
         shell: bash
 
-      - name: Install LLVM 21 runtime (Linux/macOS)
-        if: runner.os != 'Windows'
+      - name: Install LLVM 21 runtime (Linux)
+        if: runner.os == 'Linux'
         run: |
-          if [ "${RUNNER_OS}" = "Linux" ]; then
-            sudo apt-get update
-            sudo apt-get install -y wget lsb-release gnupg software-properties-common
-            wget -q https://apt.llvm.org/llvm.sh
-            chmod +x llvm.sh
-            sudo ./llvm.sh 21
-            echo "LD_LIBRARY_PATH=/usr/lib/llvm-21/lib:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
-          else
-            brew install llvm@21
-            echo "/opt/homebrew/opt/llvm@21/bin" >> "$GITHUB_PATH"
-            echo "DYLD_LIBRARY_PATH=/opt/homebrew/opt/llvm@21/lib:${DYLD_LIBRARY_PATH}" >> "$GITHUB_ENV"
-          fi
+          sudo apt-get update
+          sudo apt-get install -y wget lsb-release gnupg software-properties-common
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 21
+          echo "LD_LIBRARY_PATH=/usr/lib/llvm-21/lib:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+        shell: bash
+
+      - name: Install LLVM 21 runtime (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm@21
+          LLVM_PREFIX="$(brew --prefix llvm@21)"
+          echo "${LLVM_PREFIX}/bin" >> "$GITHUB_PATH"
+          echo "DYLD_LIBRARY_PATH=${LLVM_PREFIX}/lib:${DYLD_LIBRARY_PATH}" >> "$GITHUB_ENV"
         shell: bash
 
       - name: Install thagc (POSIX)
         if: runner.os != 'Windows'
         run: |
           chmod +x .github/scripts/install_thagc_posix.sh
-          .github/scripts/install_thagc_posix.sh "${THAGC_TAG}" stable
+          .github/scripts/install_thagc_posix.sh "${THAGC_TAG}" stable "${{ matrix.arch }}"
         shell: bash
 
       - name: Install LLVM 21 runtime (Windows)
@@ -88,7 +108,7 @@ jobs:
 
       - name: Install thagc (Windows)
         if: runner.os == 'Windows'
-        run: .github/scripts/install_thagc_windows.ps1 -Tag "${{ env.THAGC_TAG }}" -Channel stable
+        run: .github/scripts/install_thagc_windows.ps1 -Tag "${{ env.THAGC_TAG }}" -Channel stable -Arch "${{ matrix.arch }}"
         shell: pwsh
 
       - name: Verify toolchain
@@ -108,11 +128,11 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           mkdir -p dist
-          archive="drago-${RELEASE_TAG}-${{ matrix.archive_suffix }}.${{ matrix.archive_ext }}"
+          archive="drago-${RELEASE_TAG}-${{ matrix.platform }}-${{ matrix.arch }}.${{ matrix.archive_ext }}"
           tar -czf "dist/${archive}" "${{ matrix.bin_name }}" README.md
           (
             cd dist
-            shasum -a 256 "${archive}" > "SHA256SUMS-${{ matrix.archive_suffix }}.txt"
+            shasum -a 256 "${archive}" > "SHA256SUMS-${{ matrix.platform }}-${{ matrix.arch }}.txt"
           )
         shell: bash
 
@@ -120,16 +140,16 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           New-Item -Type Directory -Path dist -Force | Out-Null
-          $archive = "drago-$env:RELEASE_TAG-${{ matrix.archive_suffix }}.${{ matrix.archive_ext }}"
+          $archive = "drago-$env:RELEASE_TAG-${{ matrix.platform }}-${{ matrix.arch }}.${{ matrix.archive_ext }}"
           Compress-Archive -Path "${{ matrix.bin_name }}","README.md" -DestinationPath (Join-Path "dist" $archive) -Force
           $hash = (Get-FileHash -Path (Join-Path "dist" $archive) -Algorithm SHA256).Hash.ToLower()
-          "$hash  $archive" | Out-File -FilePath (Join-Path "dist" "SHA256SUMS-${{ matrix.archive_suffix }}.txt") -Encoding ascii
+          "$hash  $archive" | Out-File -FilePath (Join-Path "dist" "SHA256SUMS-${{ matrix.platform }}-${{ matrix.arch }}.txt") -Encoding ascii
         shell: pwsh
 
       - name: Upload release bundle
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.archive_suffix }}
+          name: release-${{ matrix.platform }}-${{ matrix.arch }}
           path: dist/*
           if-no-files-found: error
 
@@ -161,11 +181,15 @@ jobs:
           dist = Path("dist")
           required = [
               f"drago-{tag}-linux-x86_64.tar.gz",
-              f"drago-{tag}-macos-arm64.tar.gz",
+              f"drago-{tag}-linux-aarch64.tar.gz",
+              f"drago-{tag}-macos-aarch64.tar.gz",
               f"drago-{tag}-windows-x86_64.zip",
+              f"drago-{tag}-windows-aarch64.zip",
               "SHA256SUMS-linux-x86_64.txt",
-              "SHA256SUMS-macos-arm64.txt",
+              "SHA256SUMS-linux-aarch64.txt",
+              "SHA256SUMS-macos-aarch64.txt",
               "SHA256SUMS-windows-x86_64.txt",
+              "SHA256SUMS-windows-aarch64.txt",
           ]
           missing = [name for name in required if not (dist / name).exists()]
           if missing:

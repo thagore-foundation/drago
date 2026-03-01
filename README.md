@@ -66,9 +66,9 @@ export DRAGO_REGISTRY_BASE="file:///media/lehungquangminh/QM_SSD/drago/registry"
 
 - `Drago CI` (`.github/workflows/ci.yml`)
   - Trigger: `push` to `main`, all pull requests.
-  - Matrix: Linux (`ubuntu-latest`), macOS (`macos-14`), Windows (`windows-2022`).
+  - Matrix: Linux (`x86_64`, `aarch64`), macOS (`x86_64`, `aarch64`), Windows (`x86_64`, `aarch64`) with parity to Thagore release lanes.
   - Steps: provision LLVM 21, install `thagc` from release tag (`v1.0.0`), build `drago`, run `drago check` and `drago test`, upload platform artifacts.
 - `Drago Release` (`.github/workflows/release.yml`)
   - Trigger: tags `v*` (and manual dispatch).
-  - Build matrix: Linux x86_64, macOS arm64, Windows x86_64.
+  - Build matrix: Linux x86_64/aarch64, macOS x86_64/aarch64, Windows x86_64/aarch64 (macOS x86_64 lane is non-blocking).
   - Publish platform bundles + per-platform SHA256 manifests to GitHub Releases.

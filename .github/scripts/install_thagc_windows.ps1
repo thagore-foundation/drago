@@ -1,6 +1,7 @@
 Param(
   [string]$Tag = "v1.0.0",
-  [string]$Channel = "stable"
+  [string]$Channel = "stable",
+  [string]$Arch = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -9,7 +10,11 @@ $tmpPath = Join-Path $env:RUNNER_TEMP "thagup.ps1"
 
 Write-Host "installing thagc $Tag ($Channel)"
 Invoke-WebRequest -Uri $scriptUrl -OutFile $tmpPath
-powershell -ExecutionPolicy Bypass -File $tmpPath -Tag $Tag -Channel $Channel -Force
+if ([string]::IsNullOrWhiteSpace($Arch)) {
+  powershell -ExecutionPolicy Bypass -File $tmpPath -Tag $Tag -Channel $Channel -Force
+} else {
+  powershell -ExecutionPolicy Bypass -File $tmpPath -Tag $Tag -Channel $Channel -Arch $Arch -Force
+}
 
 $binPath = Join-Path $HOME ".thagore\bin"
 if ($env:GITHUB_PATH) {
