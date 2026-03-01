@@ -7,8 +7,13 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to release (for manual runs)"
+        description: "Tag to release"
         required: true
+        type: string
+      thagc_tag:
+        description: "thagc release tag used to build drago"
+        required: false
+        default: "v0.8.4"
         type: string
 
 permissions:
@@ -16,41 +21,115 @@ permissions:
 
 jobs:
   build:
-    name: Build release bundle (Linux)
-    runs-on: ubuntu-latest
+    name: Build release bundle (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: Linux x86_64
+            archive_suffix: linux-x86_64
+            archive_ext: tar.gz
+            bin_name: drago.bin
+          - os: macos-14
+            label: macOS arm64
+            archive_suffix: macos-arm64
+            archive_ext: tar.gz
+            bin_name: drago.bin
+          - os: windows-2022
+            label: Windows x86_64
+            archive_suffix: windows-x86_64
+            archive_ext: zip
+            bin_name: drago.exe
     env:
-      THAGC_TAG: v0.8.4
+      THAGC_TAG: ${{ github.event.inputs.thagc_tag || 'v0.8.4' }}
       DRAGO_COLOR: never
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install LLVM 21 runtime (Linux)
+      - name: Resolve release tag
         run: |
-          sudo apt-get update
-          sudo apt-get install -y wget lsb-release gnupg software-properties-common
-          wget -q https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 21
-          echo "LD_LIBRARY_PATH=/usr/lib/llvm-21/lib:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          if [ -n "${{ github.event.inputs.tag || '' }}" ]; then
+            echo "RELEASE_TAG=${{ github.event.inputs.tag }}" >> "$GITHUB_ENV"
+          else
+            echo "RELEASE_TAG=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+          fi
         shell: bash
 
-      - name: Install thagc (release)
+      - name: Install LLVM 21 runtime (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          if [ "${RUNNER_OS}" = "Linux" ]; then
+            sudo apt-get update
+            sudo apt-get install -y wget lsb-release gnupg software-properties-common
+            wget -q https://apt.llvm.org/llvm.sh
+            chmod +x llvm.sh
+            sudo ./llvm.sh 21
+            echo "LD_LIBRARY_PATH=/usr/lib/llvm-21/lib:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          else
+            brew install llvm@21
+            echo "/opt/homebrew/opt/llvm@21/bin" >> "$GITHUB_PATH"
+            echo "DYLD_LIBRARY_PATH=/opt/homebrew/opt/llvm@21/lib:${DYLD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          fi
+        shell: bash
+
+      - name: Install thagc (POSIX)
+        if: runner.os != 'Windows'
         run: |
           chmod +x .github/scripts/install_thagc_posix.sh
           .github/scripts/install_thagc_posix.sh "${THAGC_TAG}" stable
         shell: bash
 
-      - name: Build binary
-        run: |
-          thagc build src/main.tg -o drago.bin
-          mkdir -p dist
-          tar -czf "dist/drago-${GITHUB_REF_NAME}-linux-${{ runner.arch }}.tar.gz" drago.bin README.md
+      - name: Install LLVM 21 runtime (Windows)
+        if: runner.os == 'Windows'
+        run: choco install llvm --version=21.1.8 -y --no-progress
+        shell: pwsh
+
+      - name: Install thagc (Windows)
+        if: runner.os == 'Windows'
+        run: .github/scripts/install_thagc_windows.ps1 -Tag "${{ env.THAGC_TAG }}" -Channel stable
+        shell: pwsh
+
+      - name: Verify toolchain
+        run: thagc --version
+
+      - name: Build binary (POSIX)
+        if: runner.os != 'Windows'
+        run: thagc build src/main.tg -o "${{ matrix.bin_name }}"
         shell: bash
+
+      - name: Build binary (Windows)
+        if: runner.os == 'Windows'
+        run: thagc build src/main.tg -o "${{ matrix.bin_name }}"
+        shell: pwsh
+
+      - name: Package artifact (POSIX)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p dist
+          archive="drago-${RELEASE_TAG}-${{ matrix.archive_suffix }}.${{ matrix.archive_ext }}"
+          tar -czf "dist/${archive}" "${{ matrix.bin_name }}" README.md
+          (
+            cd dist
+            shasum -a 256 "${archive}" > "SHA256SUMS-${{ matrix.archive_suffix }}.txt"
+          )
+        shell: bash
+
+      - name: Package artifact (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          New-Item -Type Directory -Path dist -Force | Out-Null
+          $archive = "drago-$env:RELEASE_TAG-${{ matrix.archive_suffix }}.${{ matrix.archive_ext }}"
+          Compress-Archive -Path "${{ matrix.bin_name }}","README.md" -DestinationPath (Join-Path "dist" $archive) -Force
+          $hash = (Get-FileHash -Path (Join-Path "dist" $archive) -Algorithm SHA256).Hash.ToLower()
+          "$hash  $archive" | Out-File -FilePath (Join-Path "dist" "SHA256SUMS-${{ matrix.archive_suffix }}.txt") -Encoding ascii
+        shell: pwsh
 
       - name: Upload release bundle
         uses: actions/upload-artifact@v4
         with:
-          name: release-linux-${{ runner.arch }}
+          name: release-${{ matrix.archive_suffix }}
           path: dist/*
           if-no-files-found: error
 
@@ -72,6 +151,29 @@ jobs:
           else
             echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Verify expected release assets
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          tag = os.environ["RELEASE_TAG"]
+          dist = Path("dist")
+          required = [
+              f"drago-{tag}-linux-x86_64.tar.gz",
+              f"drago-{tag}-macos-arm64.tar.gz",
+              f"drago-{tag}-windows-x86_64.zip",
+              "SHA256SUMS-linux-x86_64.txt",
+              "SHA256SUMS-macos-arm64.txt",
+              "SHA256SUMS-windows-x86_64.txt",
+          ]
+          missing = [name for name in required if not (dist / name).exists()]
+          if missing:
+              raise SystemExit("missing release assets: " + ", ".join(missing))
+          print("release assets verified")
+          PY
+        env:
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
 
       - name: Create release
         uses: softprops/action-gh-release@v2

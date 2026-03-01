@@ -11,47 +11,94 @@ permissions:
 
 jobs:
   build-test:
-    name: Build and test (Linux)
-    runs-on: ubuntu-latest
+    name: Build and test (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: Linux x86_64
+            artifact_name: drago-linux-x86_64
+            bin_name: drago.bin
+          - os: macos-14
+            label: macOS arm64
+            artifact_name: drago-macos-arm64
+            bin_name: drago.bin
+          - os: windows-2022
+            label: Windows x86_64
+            artifact_name: drago-windows-x86_64
+            bin_name: drago.exe
     env:
       THAGC_TAG: v0.8.4
       DRAGO_COLOR: never
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install LLVM 21 runtime (Linux)
+      - name: Install LLVM 21 runtime (Linux/macOS)
+        if: runner.os != 'Windows'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y wget lsb-release gnupg software-properties-common
-          wget -q https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 21
-          echo "LD_LIBRARY_PATH=/usr/lib/llvm-21/lib:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          if [ "${RUNNER_OS}" = "Linux" ]; then
+            sudo apt-get update
+            sudo apt-get install -y wget lsb-release gnupg software-properties-common
+            wget -q https://apt.llvm.org/llvm.sh
+            chmod +x llvm.sh
+            sudo ./llvm.sh 21
+            echo "LD_LIBRARY_PATH=/usr/lib/llvm-21/lib:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          else
+            brew install llvm@21
+            echo "/opt/homebrew/opt/llvm@21/bin" >> "$GITHUB_PATH"
+            echo "DYLD_LIBRARY_PATH=/opt/homebrew/opt/llvm@21/lib:${DYLD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          fi
         shell: bash
 
-      - name: Install thagc (release)
+      - name: Install thagc (POSIX)
+        if: runner.os != 'Windows'
         run: |
           chmod +x .github/scripts/install_thagc_posix.sh
           .github/scripts/install_thagc_posix.sh "${THAGC_TAG}" stable
         shell: bash
 
+      - name: Install LLVM 21 runtime (Windows)
+        if: runner.os == 'Windows'
+        run: choco install llvm --version=21.1.8 -y --no-progress
+        shell: pwsh
+
+      - name: Install thagc (Windows)
+        if: runner.os == 'Windows'
+        run: .github/scripts/install_thagc_windows.ps1 -Tag "${{ env.THAGC_TAG }}" -Channel stable
+        shell: pwsh
+
       - name: Verify toolchain
         run: thagc --version
 
-      - name: Build drago
-        run: thagc build src/main.tg -o drago.bin
+      - name: Build drago (POSIX)
+        if: runner.os != 'Windows'
+        run: thagc build src/main.tg -o "${{ matrix.bin_name }}"
         shell: bash
 
-      - name: Smoke test
+      - name: Build drago (Windows)
+        if: runner.os == 'Windows'
+        run: thagc build src/main.tg -o "${{ matrix.bin_name }}"
+        shell: pwsh
+
+      - name: Smoke test (POSIX)
+        if: runner.os != 'Windows'
         run: |
-          mkdir -p target
-          ./drago.bin check
-          ./drago.bin test
+          ./"${{ matrix.bin_name }}" check
+          ./"${{ matrix.bin_name }}" test
         shell: bash
+
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          .\${{ matrix.bin_name }} check
+          .\${{ matrix.bin_name }} test
+        shell: pwsh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: drago-linux-${{ runner.arch }}
-          path: drago.bin
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.bin_name }}
           if-no-files-found: error
