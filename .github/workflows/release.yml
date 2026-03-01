@@ -19,7 +19,7 @@ jobs:
     name: Build release bundle (Linux)
     runs-on: ubuntu-latest
     env:
-      THAGORE_REF: main
+      THAGC_TAG: v0.8.4
       DRAGO_COLOR: never
     steps:
       - uses: actions/checkout@v4
@@ -27,17 +27,17 @@ jobs:
       - name: Install LLVM 21 runtime (Linux)
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget lsb-release gnupg software-properties-common cmake ninja-build git libffi-dev libxml2-dev zlib1g-dev
+          sudo apt-get install -y wget lsb-release gnupg software-properties-common
           wget -q https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 21
           echo "LD_LIBRARY_PATH=/usr/lib/llvm-21/lib:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
         shell: bash
 
-      - name: Build thagc from source (main)
+      - name: Install thagc (release)
         run: |
-          chmod +x .github/scripts/build_thagc_from_source.sh
-          .github/scripts/build_thagc_from_source.sh "${THAGORE_REF}"
+          chmod +x .github/scripts/install_thagc_posix.sh
+          .github/scripts/install_thagc_posix.sh "${THAGC_TAG}" stable
         shell: bash
 
       - name: Build binary
