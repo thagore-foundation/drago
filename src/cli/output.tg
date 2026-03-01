@@ -1,36 +1,90 @@
+import lib.process as process
 import std.string as str
 
+func env_value(name: ptr) -> ptr:
+  return str.concat("", process.env(name))
+
+func color_enabled() -> bool:
+  let mode = env_value("DRAGO_COLOR")
+  if (str.str_eq(mode, "never")):
+    return false
+  if (str.str_eq(mode, "always")):
+    return true
+
+  let no_color = env_value("NO_COLOR")
+  if (str.str_eq(no_color, "") == false):
+    return false
+
+  let force = env_value("CLICOLOR_FORCE")
+  if (str.str_eq(force, "1")):
+    return true
+
+  let term = env_value("TERM")
+  if (str.str_eq(term, "")):
+    let os_name = env_value("OS")
+    if (str.str_eq(os_name, "Windows_NT")):
+      let wt = env_value("WT_SESSION")
+      let ansicon = env_value("ANSICON")
+      let conemu = env_value("ConEmuANSI")
+      if (str.str_eq(wt, "") == false):
+        return true
+      if (str.str_eq(ansicon, "") == false):
+        return true
+      if (str.str_eq(conemu, "ON")):
+        return true
+    return false
+  if (str.str_eq(term, "dumb")):
+    let os_name = env_value("OS")
+    if (str.str_eq(os_name, "Windows_NT")):
+      let wt = env_value("WT_SESSION")
+      let ansicon = env_value("ANSICON")
+      let conemu = env_value("ConEmuANSI")
+      if (str.str_eq(wt, "") == false):
+        return true
+      if (str.str_eq(ansicon, "") == false):
+        return true
+      if (str.str_eq(conemu, "ON")):
+        return true
+    return false
+
+  return true
+
+func style(code: ptr, text: ptr) -> ptr:
+  if (color_enabled() == false):
+    return text
+  return str.concat("\x1b[", str.concat(code, str.concat("m", str.concat(text, "\x1b[0m"))))
+
 pub func print_header(title: ptr, quiet: i32):
-  if (str.str_eq(str.from_int(quiet), "1")):
+  if (quiet != 0):
     return 0
-  print(str.concat("  🔨 ", title))
+  print(style("1;36", str.concat("  🔨 ", title)))
   print("")
   return 1
 
 pub func print_success(msg: ptr, quiet: i32):
-  if (str.str_eq(str.from_int(quiet), "1")):
+  if (quiet != 0):
     return 0
-  print(str.concat("  ✓ ", msg))
+  print(style("1;32", str.concat("  ✓ ", msg)))
   return 1
 
 pub func print_warning(msg: ptr, quiet: i32):
-  if (str.str_eq(str.from_int(quiet), "1")):
+  if (quiet != 0):
     return 0
-  print(str.concat("  ⚠ ", msg))
+  print(style("1;33", str.concat("  ⚠ ", msg)))
   return 1
 
 pub func print_error(msg: ptr):
-  print(str.concat("  ✗ ", msg))
+  print(style("1;31", str.concat("  ✗ ", msg)))
   return 1
 
 pub func print_step(msg: ptr, quiet: i32):
-  if (str.str_eq(str.from_int(quiet), "1")):
+  if (quiet != 0):
     return 0
-  print(str.concat("  ○ ", msg))
+  print(style("1;34", str.concat("  ○ ", msg)))
   return 1
 
 pub func print_separator(quiet: i32):
-  if (str.str_eq(str.from_int(quiet), "1")):
+  if (quiet != 0):
     return 0
-  print("  ─────────────────────")
+  print(style("2;37", "  ─────────────────────"))
   return 1

@@ -51,6 +51,7 @@ export DRAGO_REGISTRY_BASE="file:///media/lehungquangminh/QM_SSD/drago/registry"
 
 - `THAGC`: path to compiler binary (`thagc`)
 - `DRAGO_TARGET`: optional target triple for cross compile
+- `DRAGO_COLOR`: `auto` (default), `always`, `never`
 - `DRAGO_BUILD_FLAGS`: build flags fingerprint for cache metadata
 - `DRAGO_OFFLINE=1`: block network download and use local cache only
 - `DRAGO_REGISTRY_BASE`: registry base URL override
