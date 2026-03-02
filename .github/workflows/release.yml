@@ -84,10 +84,12 @@ jobs:
       - name: Install LLVM 21 runtime (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install llvm@21
+          brew install llvm@21 openssl@3
           LLVM_PREFIX="$(brew --prefix llvm@21)"
+          OPENSSL_PREFIX="$(brew --prefix openssl@3)"
           echo "${LLVM_PREFIX}/bin" >> "$GITHUB_PATH"
           echo "DYLD_LIBRARY_PATH=${LLVM_PREFIX}/lib:${DYLD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          echo "OPENSSL_PREFIX=${OPENSSL_PREFIX}" >> "$GITHUB_ENV"
         shell: bash
 
       - name: Install thagc (POSIX)
@@ -174,6 +176,9 @@ jobs:
         run: |
           if [[ "${{ runner.os }}" == "macOS" ]]; then
             thagc build src/main.tg -o "${{ matrix.bin_name }}" \
+              --link-dir="${OPENSSL_PREFIX}/lib" \
+              --link-lib=ssl \
+              --link-lib=crypto \
               --link-lib=sqlite3 \
               --link-lib=c++ \
               --link-lib=c++abi
