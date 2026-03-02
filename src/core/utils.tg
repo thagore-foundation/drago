@@ -53,3 +53,21 @@ pub func non_zero(v: i64) -> bool:
   if (v == zero):
     return false
   return true
+
+pub func is_valid_package_name(name: ptr) -> bool:
+  let s = str.trim(str.concat("", name))
+  let zero: i64 = 0
+  let max_len: i64 = 64
+  if (str.slen(s) == zero):
+    return false
+  if (str.slen(s) > max_len):
+    return false
+  if (str.str_has(s, ".")):
+    return false
+  if (str.str_has(s, " ")):
+    return false
+  if (str.str_has(s, "/")):
+    return false
+  if (str.str_has(s, "\\")):
+    return false
+  return true

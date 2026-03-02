@@ -638,6 +638,9 @@ pub func dependency_spec(dep_line: ptr) -> ptr:
   return str.trim(list.list_get(parts, 1))
 
 pub func add_dependency(project_root: ptr, dep_name: ptr, dep_spec: ptr) -> i32:
+  if (utils.is_valid_package_name(dep_name) == false):
+    print(str.concat("ERROR: invalid dependency name `", str.concat(dep_name, "` — use only letters, digits, `_`, or `-` (no dots)")))
+    return 0
   let name = load_name(project_root)
   let version = load_version(project_root)
   let entry = load_entry(project_root)

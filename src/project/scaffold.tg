@@ -9,6 +9,10 @@ pub func create_project(name: ptr) -> i32:
     print("ERROR: project name is required")
     return 0
 
+  if (utils.is_valid_package_name(name) == false):
+    print(str.concat("ERROR: invalid project name `", str.concat(name, "` — use only letters, digits, `_`, or `-` (no dots, spaces, or slashes)")))
+    return 0
+
   if (fs.exists(name) != 0):
     print(str.concat("ERROR: directory already exists: ", name))
     return 0
