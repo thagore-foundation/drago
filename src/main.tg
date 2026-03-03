@@ -44,7 +44,7 @@ func usage():
   print("  outdated")
 
 func drago_version() -> ptr:
-  return str.concat("", "1.0.5")
+  return str.concat("", "1.0.6")
 
 func project_root() -> ptr:
   return fs.getcwd()
