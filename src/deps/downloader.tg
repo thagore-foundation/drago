@@ -24,9 +24,12 @@ pub func verify_checksum(archive_path: ptr, checksum: ptr) -> i32:
 
 pub func extract_archive(archive_path: ptr, out_dir: ptr) -> i32:
   if (fs.mkdir(out_dir) == 0):
-    return 0
+    if (fs.exists(out_dir) == 0):
+      return 0
   let cmd = str.concat("tar -xzf \"", str.concat(archive_path, str.concat("\" --strip-components=1 -C \"", str.concat(out_dir, "\""))))
-  return process.run(cmd)
+  if (process.run(cmd) != 0):
+    return 0
+  return 1
 
 pub func package_tarball_url(repo: ptr, version: ptr) -> ptr:
   let v_prefixed = str.concat("v", version)

@@ -1,3 +1,4 @@
+import lib.fs as fs
 import lib.http as http
 import lib.map as map
 import lib.process as process
@@ -206,25 +207,105 @@ pub func reg_update_all(project_root: ptr, feature_csv: ptr, all_features: i32, 
       return 0
   return 1
 
+func publish_get_remote_repo() -> ptr:
+  let cmd = "git remote get-url origin 2>/dev/null | sed 's|.*github\\.com[:/]||;s|\\.git$||'"
+  return str.trim(process.capture(cmd))
+
+func publish_escape_shell(s: ptr) -> ptr:
+  return str.replace(s, "\"", "\\\"")
+
+func publish_script_body(name: ptr, version: ptr, repo: ptr, description: ptr) -> ptr:
+  let s = str.concat("", "set -e\n\n")
+  s = str.concat(s, str.concat("NAME=\"", str.concat(name, "\"\n")))
+  s = str.concat(s, str.concat("VERSION=\"", str.concat(version, "\"\n")))
+  s = str.concat(s, str.concat("REPO=\"", str.concat(repo, "\"\n")))
+  s = str.concat(s, str.concat("DESCRIPTION=\"", str.concat(description, "\"\n")))
+  s = str.concat(s, str.concat("TAG=\"v", str.concat(version, "\"\n")))
+  s = str.concat(s, "TODAY=$(date +%Y-%m-%d)\n\n")
+  s = str.concat(s, "TOKEN=\"\"\n")
+  s = str.concat(s, "if command -v gh >/dev/null 2>&1; then\n")
+  s = str.concat(s, "  TOKEN=$(gh auth token 2>/dev/null || true)\n")
+  s = str.concat(s, "fi\n")
+  s = str.concat(s, "if [ -z \"$TOKEN\" ]; then TOKEN=\"$GITHUB_TOKEN\"; fi\n")
+  s = str.concat(s, "if [ -z \"$TOKEN\" ]; then\n")
+  s = str.concat(s, "  echo \"ERROR: No GitHub token. Run: gh auth login\"\n")
+  s = str.concat(s, "  exit 1\n")
+  s = str.concat(s, "fi\n\n")
+  s = str.concat(s, "if git rev-parse --verify \"refs/tags/$TAG\" >/dev/null 2>&1; then\n")
+  s = str.concat(s, "  echo \"  Tag $TAG already exists, skipping\"\n")
+  s = str.concat(s, "else\n")
+  s = str.concat(s, "  git tag -a \"$TAG\" -m \"Release $TAG\"\n")
+  s = str.concat(s, "  echo \"  Created tag $TAG\"\n")
+  s = str.concat(s, "fi\n")
+  s = str.concat(s, "git push origin \"$TAG\"\n")
+  s = str.concat(s, "echo \"  Pushed $TAG to GitHub\"\n\n")
+  s = str.concat(s, "gh repo fork thagore-foundation/registry --clone=false 2>/dev/null || true\n")
+  s = str.concat(s, "USER=$(gh api user --jq .login 2>/dev/null)\n")
+  s = str.concat(s, "if [ -z \"$USER\" ]; then\n")
+  s = str.concat(s, "  echo \"ERROR: Cannot determine GitHub username\"\n")
+  s = str.concat(s, "  exit 1\n")
+  s = str.concat(s, "fi\n\n")
+  s = str.concat(s, "BRANCH=\"add-${NAME}-${VERSION}\"\n")
+  s = str.concat(s, "CURRENT=$(gh api \"repos/$USER/registry/contents/publish.yaml\" --jq .content 2>/dev/null | base64 -d 2>/dev/null || echo \"\")\n\n")
+  s = str.concat(s, "if echo \"$CURRENT\" | grep -q \"^${NAME}:\"; then\n")
+  s = str.concat(s, "  echo \"  Package $NAME already submitted\"\n")
+  s = str.concat(s, "  exit 0\n")
+  s = str.concat(s, "fi\n\n")
+  s = str.concat(s, "NEW_ENTRY=\"${NAME}:\n")
+  s = str.concat(s, "  repo: ${REPO}\n")
+  s = str.concat(s, "  version: ${VERSION}\n")
+  s = str.concat(s, "  description: \\\"${DESCRIPTION}\\\"\n")
+  s = str.concat(s, "  checksum: \\\"\\\"\n")
+  s = str.concat(s, "  submitted: ${TODAY}\n")
+  s = str.concat(s, "  status: pending-review\"\n\n")
+  s = str.concat(s, "NEW_CONTENT=\"${CURRENT}\n${NEW_ENTRY}\n\"\n")
+  s = str.concat(s, "ENCODED=$(printf \"%s\" \"$NEW_CONTENT\" | base64 | tr -d '\\n')\n\n")
+  s = str.concat(s, "MAIN_SHA=$(gh api \"repos/$USER/registry/git/ref/heads/main\" --jq .object.sha)\n")
+  s = str.concat(s, "gh api \"repos/$USER/registry/git/refs\" -X POST \\\n")
+  s = str.concat(s, "  -f ref=\"refs/heads/$BRANCH\" -f sha=\"$MAIN_SHA\" 2>/dev/null || true\n\n")
+  s = str.concat(s, "FILE_SHA_BRANCH=$(gh api \"repos/$USER/registry/contents/publish.yaml?ref=$BRANCH\" --jq .sha)\n")
+  s = str.concat(s, "gh api \"repos/$USER/registry/contents/publish.yaml\" -X PUT \\\n")
+  s = str.concat(s, "  -f message=\"Add ${NAME}@${VERSION}\" \\\n")
+  s = str.concat(s, "  -f content=\"$ENCODED\" \\\n")
+  s = str.concat(s, "  -f sha=\"$FILE_SHA_BRANCH\" \\\n")
+  s = str.concat(s, "  -f branch=\"$BRANCH\"\n\n")
+  s = str.concat(s, "PR_URL=$(gh pr create \\\n")
+  s = str.concat(s, "  --repo thagore-foundation/registry \\\n")
+  s = str.concat(s, "  --title \"Add ${NAME} ${VERSION}\" \\\n")
+  s = str.concat(s, "  --head \"${USER}:${BRANCH}\" \\\n")
+  s = str.concat(s, "  --base main \\\n")
+  s = str.concat(s, "  --body \"New package submission\n\n")
+  s = str.concat(s, "Package: ${NAME}@${VERSION}\n")
+  s = str.concat(s, str.concat("Repo: https:", str.concat("/", "/github.com/${REPO}\n")))
+  s = str.concat(s, "Description: ${DESCRIPTION}\n\n")
+  s = str.concat(s, "Submitted via drago publish\")\n")
+  s = str.concat(s, "echo \"  PR created: $PR_URL\"\n")
+  return s
+
 pub func reg_publish_project(project_root: ptr) -> i32:
   let name = manifest.load_name(project_root)
   let version = manifest.load_version(project_root)
+  let description = manifest.load_description(project_root)
   if (utils.is_empty(name)):
     print("ERROR: invalid drago.toml package name/version")
     return 0
   if (utils.is_empty(version)):
     print("ERROR: invalid drago.toml package name/version")
     return 0
-  let token = process.env("GITHUB_TOKEN")
-  if (utils.is_empty(token)):
-    print("ERROR: GITHUB_TOKEN is required for publish")
+  let repo = publish_get_remote_repo()
+  if (utils.is_empty(repo)):
+    print("ERROR: could not determine GitHub repo from git remote origin")
     return 0
-  let body = str.concat("publish ", str.concat(name, str.concat("@", version)))
-  let rc = http.http_post(str.concat("https:", str.concat("/", "/api.github.com/repos/thagore-foundation/registry/issues")), body, 5000)
-  if (rc == 0):
-    print("ERROR: publish failed")
+  let desc_escaped = publish_escape_shell(description)
+  let script = publish_script_body(name, version, repo, desc_escaped)
+  let script_path = str.concat("/tmp/drago_publish_", str.concat(name, ".sh"))
+  if (fs.write_file(script_path, script) == 0):
+    print("ERROR: could not write publish script")
     return 0
-  print("publish request created")
+  let rc = process.run(str.concat("sh ", script_path))
+  fs.remove_path(script_path)
+  if (rc != 0):
+    return 0
   return 1
 
 pub func reg_audit_dependencies(project_root: ptr, offline_mode: i32) -> i32:
