@@ -1,6 +1,6 @@
 [package]
 name = "drago"
-version = "1.0.4"
+version = "1.0.5"
 entry = "src/main.tg"
 description = "Drago package manager for Thagore"
 license = "Apache-2.0"
