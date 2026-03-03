@@ -43,6 +43,9 @@ func usage():
   print("  why <package>")
   print("  outdated")
 
+func drago_version() -> ptr:
+  return str.concat("", "1.0.5")
+
 func project_root() -> ptr:
   return fs.getcwd()
 
@@ -971,7 +974,7 @@ func main() -> i32:
     usage()
     return 0
   if (str.str_eq(cmd, "version")):
-    print(str.concat("drago ", manifest.load_version(root)))
+    print(str.concat("drago ", drago_version()))
     return 0
   if (str.str_eq(cmd, "new")):
     if (scaffold.create_project(arg1) != 0):
