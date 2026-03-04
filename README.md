@@ -10,6 +10,7 @@ It is implemented in pure `.tg` and compiled by `thagc`.
 - `curl`
 - `tar`
 - `sha256sum`
+- Windows now supported natively via PowerShell (no Git Bash required); POSIX tools still used on Linux/macOS.
 
 ## Build Drago
 

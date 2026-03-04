@@ -1,0 +1,42 @@
+import lib.fs as fs
+import lib.path as path
+import std.string as str
+import src.core.shell as shell
+import src.deps.registry as registry
+
+func expect_eq(label: ptr, got: ptr, want: ptr) -> bool:
+  if (str.str_eq(got, want)):
+    return true
+  print(str.concat("FAIL ", str.concat(label, str.concat(": got ", str.concat(got, str.concat(" want ", want))))))
+  return false
+
+func normalize_file_url(p: ptr) -> ptr:
+  # Convert backslashes to forward slashes for file:// on Windows.
+  let with_slash = str.replace(p, "\\", "/")
+  return str.concat("file://", with_slash)
+
+func test_fetch_file_url() -> bool:
+  let cwd = fs.getcwd()
+  let tmp = path.join(cwd, "tmp_shell_test.txt")
+  let content = "hello-shell"
+  fs.write(tmp, content)
+  let url = normalize_file_url(tmp)
+  let got = registry.fetch_url_text(url, 0)
+  fs.fs_remove(tmp)
+  return expect_eq("fetch_file_url", str.trim(got), content)
+
+func test_sha256() -> bool:
+  let cwd = fs.getcwd()
+  let tmp = path.join(cwd, "tmp_shell_sha.txt")
+  let content = "abc"
+  fs.write(tmp, content)
+  let got = shell.sha256(tmp)
+  fs.fs_remove(tmp)
+  return expect_eq("sha256", got, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+
+func main() -> i32:
+  let ok1 = test_fetch_file_url()
+  let ok2 = test_sha256()
+  if (ok1 && ok2):
+    return 0
+  return 1
