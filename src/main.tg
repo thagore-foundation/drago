@@ -866,7 +866,12 @@ func handle_check_single(root: ptr, quiet: i32, features: ptr, all_features: i32
   out.print_action("🔨", str.concat("Checking ", str.concat(project_name(root), str.concat(" v", project_version(root)))), quiet)
   let entry = path.join(root, manifest.load_entry(root))
   let started = time.now_ms()
-  let out_file = path.join(path.join(root, "target"), "check.bin")
+  let target_dir = path.join(root, "target")
+  if (fs.mkdir(target_dir) == 0):
+    if (fs.exists(target_dir) == 0):
+      out.print_error(str.concat("cannot create target directory: ", target_dir))
+      return false
+  let out_file = path.join(target_dir, "check.bin")
   let out_file_ll = str.concat(out_file, ".ll")
   if (fs.exists(out_file) != 0):
     fs.remove_path(out_file)
