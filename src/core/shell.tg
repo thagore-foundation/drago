@@ -16,7 +16,7 @@ func wrap_ps(cmd: ptr) -> ptr:
   # Use -NoProfile for speed and to avoid user profile side-effects.
   return str.concat("powershell -NoProfile -Command \"", str.concat(cmd, "\""))
 
-func lower_hex(s: ptr) -> ptr:
+pub func lower_hex(s: ptr) -> ptr:
   # Minimal lowercase conversion for hex strings (A-F) to avoid needing full unicode tables.
   let text = str.concat("", s)
   let i: i64 = 0
@@ -24,13 +24,25 @@ func lower_hex(s: ptr) -> ptr:
   let out = str.concat("", "")
   while (i < n):
     let ch = str.substr(text, i, 1)
-    if (str.str_eq(ch, "A")): ch = "a"
-    if (str.str_eq(ch, "B")): ch = "b"
-    if (str.str_eq(ch, "C")): ch = "c"
-    if (str.str_eq(ch, "D")): ch = "d"
-    if (str.str_eq(ch, "E")): ch = "e"
-    if (str.str_eq(ch, "F")): ch = "f"
-    out = str.concat(out, ch)
+    if (str.str_eq(ch, "A")):
+      out = str.concat(out, "a")
+    else:
+      if (str.str_eq(ch, "B")):
+        out = str.concat(out, "b")
+      else:
+        if (str.str_eq(ch, "C")):
+          out = str.concat(out, "c")
+        else:
+          if (str.str_eq(ch, "D")):
+            out = str.concat(out, "d")
+          else:
+            if (str.str_eq(ch, "E")):
+              out = str.concat(out, "e")
+            else:
+              if (str.str_eq(ch, "F")):
+                out = str.concat(out, "f")
+              else:
+                out = str.concat(out, ch)
     i = i + 1
   return out
 
@@ -42,7 +54,11 @@ pub func fetch_text(url: ptr, offline_mode: i32) -> ptr:
   let file_prefix = str.concat("file:", str.concat("/", "/"))
   if (utils.utils_starts_with(url, file_prefix)):
     let p = str.substr(url, str.slen(file_prefix), str.slen(url) - str.slen(file_prefix))
-    return fs.read(p)
+    if (is_windows() == false):
+      let cmd = str.concat("cat \"", str.concat(p, "\""))
+      return process.capture(cmd)
+    let ps = str.concat("& { Get-Content -Raw -Path '", str.concat(p, "' }"))
+    return process.capture(wrap_ps(ps))
   if (offline != 0):
     return str.concat("", "")
   if (is_windows() == false):
@@ -56,7 +72,10 @@ pub func download(url: ptr, out_path: ptr) -> i32:
   if (is_windows() == false):
     let cmd = str.concat("curl -fsSL \"", str.concat(url, str.concat("\" -o \"", str.concat(out_path, "\""))))
     return process.run(cmd)
-  let ps = str.concat("& { Invoke-WebRequest -UseBasicParsing -Uri '", str.concat(url, str.concat("' -OutFile '", str.concat(out_path, "'"))), " }")
+  let ps_prefix = "& { Invoke-WebRequest -UseBasicParsing -Uri '"
+  let ps_mid = "' -OutFile '"
+  let ps_suffix = "' }"
+  let ps = str.concat(ps_prefix, str.concat(url, str.concat(ps_mid, str.concat(out_path, ps_suffix))))
   return process.run(wrap_ps(ps))
 
 pub func sha256(file_path: ptr) -> ptr:
@@ -69,7 +88,9 @@ pub func sha256(file_path: ptr) -> ptr:
     if (list.list_count(parts) == 0):
       return str.concat("", "")
     return lower_hex(str.trim(list.list_get(parts, 0)))
-  let ps = str.concat("& { (Get-FileHash -Algorithm SHA256 -Path '", str.concat(file_path, "').Hash) }")
+  let ps_prefix = "& { (Get-FileHash -Algorithm SHA256 -Path '"
+  let ps_suffix = "').Hash) }"
+  let ps = str.concat(ps_prefix, str.concat(file_path, ps_suffix))
   return lower_hex(str.trim(process.capture(wrap_ps(ps))))
 
 pub func untar(archive_path: ptr, dest_dir: ptr) -> i32:

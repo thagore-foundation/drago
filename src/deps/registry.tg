@@ -56,12 +56,12 @@ pub func registry_base() -> ptr:
 pub func registry_url(file_name: ptr) -> ptr:
   return str.concat(registry_base(), str.concat("/", file_name))
 
-func is_file_url(url: ptr) -> i32:
+func is_file_url(url: ptr) -> bool:
   let file_prefix = str.concat("file:", str.concat("/", "/"))
   return str.str_starts(url, file_prefix)
 
 pub func fetch_url_text(url: ptr, offline_mode: i32) -> ptr:
-  if (is_file_url(url) != 0):
+  if (is_file_url(url)):
     return shell.fetch_text(url, 0)
   return shell.fetch_text(url, offline_mode)
 

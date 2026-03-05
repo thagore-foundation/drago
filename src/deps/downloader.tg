@@ -1,6 +1,7 @@
 import lib.fs as fs
 import lib.map as map
 import lib.path as path
+import lib.process as process
 import std.list as list
 import std.string as str
 import src.core.utils as utils
@@ -16,7 +17,7 @@ pub func verify_checksum(archive_path: ptr, checksum: ptr) -> i32:
   let digest = shell.sha256(archive_path)
   if (utils.is_empty(digest)):
     return 0
-  if (str.str_eq(digest, str.lower(str.trim(checksum)))):
+  if (str.str_eq(digest, shell.lower_hex(str.trim(checksum)))):
     return 1
   return 0
 
