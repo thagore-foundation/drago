@@ -66,10 +66,11 @@ pub func run_tests(project_root: ptr, quiet: i32, features: ptr, all_features: i
       out.print_warning(str.concat("Skip ", test_file), quiet)
       i = i + 1
       continue
-    if (utils.is_empty(link_arg) && utils.utils_contains(test_file, "manifest")):
-      out.print_warning(str.concat("Skip ", test_file), quiet)
-      i = i + 1
-      continue
+    if (utils.is_empty(link_arg)):
+      if (utils.utils_contains(test_file, "manifest")):
+        out.print_warning(str.concat("Skip ", test_file), quiet)
+        i = i + 1
+        continue
     let out_bin = path.join(target_dir, str.concat("test_", str.concat(str.from_int(i), ".bin")))
     let cmd_build = str.concat(linker.thagc_bin(), str.concat(" build ", str.concat(test_file, str.concat(" -o ", out_bin))))
     if (utils.is_empty(link_arg) == false):
