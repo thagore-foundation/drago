@@ -5,6 +5,8 @@ OUT     := drago.bin
 
 build: sync-version
 	PATH="$$HOME/bin_wrap:$$PATH" thagc build src/main.tg -o $(OUT)
+	@mkdir -p bin
+	@cp -f ../win32api/win32shim.dll bin/ 2>/dev/null || true
 
 sync-version:
 	@echo "  version: $(VERSION)"
