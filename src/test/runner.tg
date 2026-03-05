@@ -43,6 +43,7 @@ pub func run_tests(project_root: ptr, quiet: i32, features: ptr, all_features: i
 
   # Determine link flags for runtime libs (sqlite) once.
   let env_link = process.env("DRAGO_TEST_LINK")
+  # Default link flags prioritize sqlite3, otherwise allow tests to skip DB without failure.
   let have_sqlite = process.run("pkg-config --exists sqlite3") == 0
   let link_arg = str.concat("", env_link)
   if (utils.is_empty(env_link)):
@@ -50,7 +51,7 @@ pub func run_tests(project_root: ptr, quiet: i32, features: ptr, all_features: i
       link_arg = str.concat("", " --link sqlite3")
     else:
       link_arg = str.concat("", "")
-      out.print_warning("sqlite3 not found (pkg-config). DB-related tests may be skipped.", quiet)
+      out.print_warning("sqlite3 not found (pkg-config). DB-related tests will be skipped (no failure).", quiet)
 
   let target_dir = path.join(project_root, "target")
   fs.mkdir(target_dir)
