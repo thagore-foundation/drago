@@ -37,6 +37,7 @@ func test_sha256() -> bool:
 func main() -> i32:
   let ok1 = test_fetch_file_url()
   let ok2 = test_sha256()
-  if (ok1 && ok2):
-    return 0
+  if (ok1 != 0):
+    if (ok2 != 0):
+      return 0
   return 1

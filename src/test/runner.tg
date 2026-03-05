@@ -53,6 +53,12 @@ pub func run_tests(project_root: ptr, quiet: i32, features: ptr, all_features: i
     let test_file = list.list_get(tests, i)
     let out_bin = path.join(target_dir, str.concat("test_", str.concat(str.from_int(i), ".bin")))
     let cmd_build = str.concat(linker.thagc_bin(), str.concat(" build ", str.concat(test_file, str.concat(" -o ", out_bin))))
+    # Link sqlite3 by default so runtime DB stubs resolve on CI; allow override via DRAGO_TEST_LINK (e.g., empty to skip).
+    let link_arg = process.env("DRAGO_TEST_LINK")
+    if (utils.is_empty(link_arg)):
+      cmd_build = str.concat(cmd_build, " --link sqlite3")
+    else:
+      cmd_build = str.concat(cmd_build, str.concat(" ", link_arg))
     let feature_args = linker.feature_cli_args(features, all_features, no_default_features)
     if (str.str_eq(feature_args, "") == false):
       cmd_build = str.concat(cmd_build, feature_args)
