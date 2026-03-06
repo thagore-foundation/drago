@@ -5,7 +5,7 @@ Param(
 )
 
 $ErrorActionPreference = "Stop"
-$scriptUrl = "https://raw.githubusercontent.com/thagore-foundation/thagore/main/tooling/release/thagup.ps1"
+$scriptUrl = "https://thagore.org/thagup.ps1"
 $tmpPath = Join-Path $env:RUNNER_TEMP "thagup.ps1"
 
 Write-Host "installing thagc $Tag ($Channel)"

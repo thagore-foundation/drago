@@ -4,7 +4,7 @@ set -euo pipefail
 THAGC_TAG="${1:-v1.0.1}"
 CHANNEL="${2:-stable}"
 ARCH="${3:-}"
-SCRIPT_URL="https://raw.githubusercontent.com/thagore-foundation/thagore/main/tooling/release/thagup.sh"
+SCRIPT_URL="https://thagore.org/thagup.sh"
 TMP_SCRIPT="$(mktemp)"
 
 cleanup() {
