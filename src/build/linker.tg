@@ -1,11 +1,66 @@
 import lib.fs as fs
-import lib.map as map
 import lib.path as path
 import lib.process as process
+import std.list as list
 import std.string as str
-import src.cli.output as out
 import src.project.manifest as manifest
 
+# Returns true when the host is Windows.
+func is_windows() -> bool:
+  return str.str_eq(process.env("OS"), "Windows_NT")
+
+# Returns true when a path looks absolute.
+func is_absolute_path(value: ptr) -> bool:
+  let text = str.trim(str.concat("", value))
+  if (str.str_eq(text, "")):
+    return false
+  if (str.str_starts(text, "/")):
+    return true
+  if (str.str_has(text, ":")):
+    return true
+  return false
+
+# Quotes one shell argument.
+func quote_arg(value: ptr) -> ptr:
+  let text = str.replace(str.concat("", value), "\"", "\\\"")
+  return str.concat("\"", str.concat(text, "\""))
+
+# Appends a value flag.
+func append_value_flag(cmd: ptr, flag_name: ptr, flag_value: ptr) -> ptr:
+  let value = str.trim(str.concat("", flag_value))
+  if (str.str_eq(value, "")):
+    return cmd
+  return str.concat(cmd, str.concat(" ", str.concat(flag_name, str.concat(" ", quote_arg(value)))))
+
+# Appends a boolean flag.
+func append_bool_flag(cmd: ptr, flag_name: ptr, enabled: i32) -> ptr:
+  if (enabled == 0):
+    return cmd
+  return str.concat(cmd, str.concat(" ", flag_name))
+
+# Appends repeated include-dir flags from a list.
+func append_include_dirs(cmd: ptr, include_dirs: ptr) -> ptr:
+  let out = cmd
+  let i: i64 = 0
+  let n = list.list_count(include_dirs)
+  while (i < n):
+    out = append_value_flag(out, "--include-dir", list.list_get(include_dirs, i))
+    i = i + 1
+  return out
+
+# Appends passthrough extra flags from a list.
+func append_extra_flags(cmd: ptr, extra_flags: ptr) -> ptr:
+  let out = cmd
+  let i: i64 = 0
+  let n = list.list_count(extra_flags)
+  while (i < n):
+    let flag = str.trim(list.list_get(extra_flags, i))
+    if (str.str_eq(flag, "") == false):
+      out = str.concat(out, str.concat(" ", flag))
+    i = i + 1
+  return out
+
+# Returns the resolved compiler binary path.
 pub func thagc_bin() -> ptr:
   let bin = process.env("THAGC")
   if (str.str_eq(bin, "") == false):
@@ -27,56 +82,36 @@ pub func thagc_bin() -> ptr:
 
   return str.concat("", "thagc")
 
+# Ensures the target directory exists.
 pub func ensure_target_dir(project_root: ptr) -> i32:
   let t = path.join(project_root, "target")
   return fs.mkdir(t)
 
+# Returns the final output binary path for a project.
 pub func output_binary_path(project_root: ptr, project_name: ptr) -> ptr:
+  let configured = manifest.load_build_output(project_root)
+  if (str.str_eq(str.trim(configured), "") == false):
+    if (is_absolute_path(configured)):
+      return configured
+    return path.join(project_root, configured)
   let name = str.concat(project_name, ".bin")
   return path.join(path.join(project_root, "target"), name)
 
-pub func feature_cli_args(features: ptr, all_features: i32, no_default_features: i32) -> ptr:
-  if (all_features != 0):
-    return str.concat("", " --all-features")
-  let out = str.concat("", "")
-  if (no_default_features != 0):
-    out = str.concat(out, " --no-default-features")
-  let selected = str.trim(str.concat("", features))
-  if (str.str_eq(selected, "")):
-    return out
-  out = str.concat(out, str.concat(" --features ", selected))
-  return out
+# Returns the command line for `thagc build`.
+pub func build_command(entry: ptr, output_path: ptr, opt: ptr, debug: i32, target_triple: ptr, feature_csv: ptr, include_dirs: ptr, extra_flags: ptr) -> ptr:
+  let cmd = str.concat(thagc_bin(), str.concat(" build ", quote_arg(entry)))
+  cmd = append_value_flag(cmd, "--output", output_path)
+  cmd = append_value_flag(cmd, "--opt", opt)
+  cmd = append_bool_flag(cmd, "--debug", debug)
+  cmd = append_value_flag(cmd, "--target", target_triple)
+  cmd = append_value_flag(cmd, "--features", feature_csv)
+  cmd = append_include_dirs(cmd, include_dirs)
+  cmd = append_extra_flags(cmd, extra_flags)
+  return str.concat(cmd, " --json-errors")
 
-pub func link_project(project_root: ptr, target_triple: ptr, extra_flags: ptr, quiet: i32, features: ptr, all_features: i32, no_default_features: i32) -> i32:
-  let name = manifest.load_name(project_root)
-  let entry_rel = manifest.load_entry(project_root)
-  if (ensure_target_dir(project_root) == 0):
-    out.print_error("cannot create target directory")
-    return 0
-  let out_bin = output_binary_path(project_root, name)
-  if (fs.exists(out_bin) != 0):
-    fs.remove_path(out_bin)
-  let entry = path.join(project_root, entry_rel)
-  let cmd = str.concat(thagc_bin(), str.concat(" build ", str.concat(entry, str.concat(" -o ", out_bin))))
-  if (str.str_eq(extra_flags, "") == false):
-    cmd = str.concat(cmd, str.concat(" ", extra_flags))
-  cmd = str.concat(cmd, feature_cli_args(features, all_features, no_default_features))
-  if (str.str_eq(target_triple, "")):
-    cmd = cmd
-  else:
-    cmd = str.concat(cmd, str.concat(" --target=", target_triple))
-  let captured = process.capture(str.concat(cmd, " 2>&1"))
-  if (fs.exists(out_bin) == 0):
-    if (map.map_is_null_ptr(captured) == 1):
-      out.print_error("thagc link/build failed")
-    else:
-      out.print_compiler_errors(captured)
-    out.print_summary_fail("Build failed")
-    return 0
-  if (quiet == 0):
-    if (map.map_is_null_ptr(captured) == 1):
-      captured = str.concat("", "")
-    captured = str.trim(captured)
-    if (str.str_eq(captured, "") == false):
-      print(captured)
-  return 1
+# Returns the command line for `thagc check`.
+pub func check_command(entry: ptr, feature_csv: ptr, include_dirs: ptr) -> ptr:
+  let cmd = str.concat(thagc_bin(), str.concat(" check ", quote_arg(entry)))
+  let with_features = append_value_flag(cmd, "--features", feature_csv)
+  let with_includes = append_include_dirs(with_features, include_dirs)
+  return str.concat(with_includes, " --json")

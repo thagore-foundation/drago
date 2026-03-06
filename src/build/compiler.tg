@@ -1,17 +1,195 @@
+import lib.fs as fs
+import lib.path as path
 import lib.process as process
+import std.list as list
 import std.string as str
+import src.build.features as feature_flags
+import src.build.incremental as incremental
 import src.build.linker as linker
+import src.cli.output as out
+import src.deps.cache as cache
+import src.project.lockfile as lockfile
 import src.project.manifest as manifest
 
+# Returns the minimum supported compiler version.
+func minimum_thagc_version() -> ptr:
+  return str.concat("", "0.9.0")
+
+# Detects whether the host is Windows.
+func is_windows() -> bool:
+  return str.str_eq(process.env("OS"), "Windows_NT")
+
+# Redirects stderr away from the user-facing build output.
+func stderr_quiet_redirect() -> ptr:
+  if (is_windows()):
+    return str.concat("", " 2>NUL")
+  return str.concat("", " 2>/dev/null")
+
+# Extracts a JSON string field from a flat object.
+func json_string_field(raw: ptr, key: ptr) -> ptr:
+  let marker = str.concat("\"", str.concat(key, "\":\""))
+  let parts = str.split(raw, marker)
+  if (list.list_count(parts) < 2):
+    return str.concat("", "")
+  let rest = list.list_get(parts, 1)
+  let end_parts = str.split(rest, "\"")
+  if (list.list_count(end_parts) == 0):
+    return str.concat("", "")
+  return list.list_get(end_parts, 0)
+
+# Parses one semantic-version component.
+func version_component(version_text: ptr, index: i64) -> i64:
+  let parts = str.split(version_text, ".")
+  if (list.list_count(parts) <= index):
+    return 0
+  return str.to_int(str.trim(list.list_get(parts, index)))
+
+# Returns true when the found version satisfies the minimum.
+func version_at_least(found: ptr, minimum: ptr) -> i32:
+  let found_major = version_component(found, 0)
+  let found_minor = version_component(found, 1)
+  let found_patch = version_component(found, 2)
+  let min_major = version_component(minimum, 0)
+  let min_minor = version_component(minimum, 1)
+  let min_patch = version_component(minimum, 2)
+  if (found_major > min_major):
+    return 1
+  if (found_major < min_major):
+    return 0
+  if (found_minor > min_minor):
+    return 1
+  if (found_minor < min_minor):
+    return 0
+  if (found_patch < min_patch):
+    return 0
+  return 1
+
+# Returns the raw `thagc --version` JSON payload.
+func thagc_version_payload() -> ptr:
+  let cmd = str.concat(linker.thagc_bin(), " --version")
+  return str.trim(process.capture(str.concat(cmd, stderr_quiet_redirect())))
+
+# Returns the compiler version string.
 pub func thagc_version() -> ptr:
-  return str.trim(process.capture(str.concat(linker.thagc_bin(), " --version")))
+  return json_string_field(thagc_version_payload(), "thagc")
 
-pub func build_flags(project_root: ptr) -> ptr:
-  let level = manifest.load_opt_level(project_root)
-  return str.concat("-O", level)
+# Returns the compiler LLVM version string.
+pub func thagc_llvm_version() -> ptr:
+  return json_string_field(thagc_version_payload(), "llvm")
 
-pub func target_triple() -> ptr:
-  return process.env("DRAGO_TARGET")
+# Returns the compiler host triple string.
+pub func thagc_host() -> ptr:
+  return json_string_field(thagc_version_payload(), "host")
 
-pub func build_project(project_root: ptr, quiet: i32, features: ptr, all_features: i32, no_default_features: i32) -> i32:
-  return linker.link_project(project_root, target_triple(), build_flags(project_root), quiet, features, all_features, no_default_features)
+# Ensures the compiler binary is present and new enough.
+pub func ensure_thagc() -> i32:
+  let version = thagc_version()
+  if (str.str_eq(version, "")):
+    out.print_error("thagc not found")
+    print("install via: curl -fsSL https://thagore.org/install | sh")
+    return 0
+  if (version_at_least(version, minimum_thagc_version()) == 0):
+    out.print_error(str.concat("thagc ", str.concat(version, str.concat(" found, but drago 1.0.6 requires thagc ", str.concat(minimum_thagc_version(), "+")))))
+    print("run: drago update thagc")
+    return 0
+  return 1
+
+# Resolves the effective target triple.
+pub func target_triple(project_root: ptr) -> ptr:
+  let env_target = str.trim(process.env("DRAGO_TARGET"))
+  if (str.str_eq(env_target, "") == false):
+    return env_target
+  return str.trim(manifest.load_build_target(project_root))
+
+# Resolves the active feature CSV for one build.
+pub func resolved_features(project_root: ptr, cli_features: ptr, all_features: i32, no_default_features: i32, verbose: i32) -> ptr:
+  feature_flags.log_active_features(project_root, cli_features, all_features, no_default_features, verbose)
+  return feature_flags.resolve_feature_csv(project_root, cli_features, all_features, no_default_features)
+
+# Returns the primary dependency cache root.
+func drago_cache_root() -> ptr:
+  let home = process.env("HOME")
+  if (str.str_eq(home, "")):
+    return str.concat("", "")
+  return path.join(path.join(home, ".drago"), "cache")
+
+# Resolves one dependency source directory from name and version.
+func dependency_source_dir(dep_name: ptr, dep_version: ptr) -> ptr:
+  let cache_root = drago_cache_root()
+  if (str.str_eq(cache_root, "") == false):
+    let candidate = path.join(path.join(cache_root, dep_name), dep_version)
+    if (fs.exists(candidate) != 0):
+      return candidate
+  let fallback = cache.package_dir(dep_name, dep_version)
+  if (fs.exists(fallback) != 0):
+    return fallback
+  return str.concat("", "")
+
+# Collects include dirs in resolution order.
+pub func include_dirs(project_root: ptr) -> ptr:
+  let out_dirs = list.list_new()
+  list.list_append(out_dirs, path.join(project_root, "src"))
+  list.list_append(out_dirs, project_root)
+  let lines = lockfile.load_lines(project_root)
+  let i: i64 = 0
+  let n = list.list_count(lines)
+  while (i < n):
+    let dep_name = lockfile.pkg_name(list.list_get(lines, i))
+    let dep_version = lockfile.pkg_version(list.list_get(lines, i))
+    let dep_dir = dependency_source_dir(dep_name, dep_version)
+    if (str.str_eq(dep_dir, "") == false):
+      list.list_append(out_dirs, dep_dir)
+    i = i + 1
+  return out_dirs
+
+# Builds the project through the stable thagc contract.
+pub func build_project(project_root: ptr, quiet: i32, verbose: i32, cli_features: ptr, all_features: i32, no_default_features: i32) -> i32:
+  if (ensure_thagc() == 0):
+    return 0
+  if (linker.ensure_target_dir(project_root) == 0):
+    out.print_error("cannot create target directory")
+    return 0
+  let entry = path.join(project_root, manifest.load_build_entry(project_root))
+  let output_path = linker.output_binary_path(project_root, manifest.load_name(project_root))
+  let feature_csv = resolved_features(project_root, cli_features, all_features, no_default_features, verbose)
+  let include_list = include_dirs(project_root)
+  let sources = list.list_new()
+  list.list_append(sources, entry)
+  let changed = incremental.changed_sources(project_root, sources)
+  if ((list.list_count(changed) == 0) and (fs.exists(output_path) != 0)):
+    if (verbose != 0):
+      print("incremental: no source changes detected")
+    return 1
+  let cmd = linker.build_command(
+    entry,
+    output_path,
+    manifest.load_build_opt(project_root),
+    manifest.load_build_debug(project_root),
+    target_triple(project_root),
+    feature_csv,
+    include_list,
+    manifest.load_build_extra_flags(project_root)
+  )
+  let raw = str.trim(process.capture(str.concat(cmd, stderr_quiet_redirect())))
+  if (fs.exists(output_path) == 0):
+    out.print_compiler_errors(raw)
+    out.print_summary_fail("Build failed")
+    return 0
+  incremental.update_cache(project_root, sources)
+  return 1
+
+# Type-checks the project through the stable thagc contract.
+pub func check_project(project_root: ptr, quiet: i32, verbose: i32, cli_features: ptr, all_features: i32, no_default_features: i32) -> i32:
+  let _ = quiet
+  if (ensure_thagc() == 0):
+    return 0
+  let entry = path.join(project_root, manifest.load_build_entry(project_root))
+  let feature_csv = resolved_features(project_root, cli_features, all_features, no_default_features, verbose)
+  let raw = str.trim(process.capture(str.concat(linker.check_command(entry, feature_csv, include_dirs(project_root)), stderr_quiet_redirect())))
+  if (str.str_eq(raw, "")):
+    return 1
+  if (str.str_eq(raw, "[]")):
+    return 1
+  out.print_compiler_errors(raw)
+  out.print_summary_fail("Check failed")
+  return 0
