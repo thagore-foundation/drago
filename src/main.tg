@@ -764,7 +764,9 @@ func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32, package_name: ptr
       return false
     let dep_name = source_alias
     if (utils.is_empty(dep_name)):
-      out.print_error("external source requires --alias <name>")
+      dep_name = utils.source_leaf_name(source_value)
+    if (utils.is_empty(dep_name)):
+      out.print_error("external source requires --alias <name> when name cannot be inferred")
       return false
     let title = str.concat(dep_name, str.concat(" <= ", source_value))
     out.print_action("📦", str.concat("Adding ", title), quiet)

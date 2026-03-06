@@ -27,13 +27,13 @@ $THAGC build src/main.tg -o drago.bin
 - `drago run`
 - `drago test`
 - `drago add <package> [version]`
-- `drago add --git <url> [ref] --alias <name>`
-- `drago add --path <dir> [version] --alias <name>`
+- `drago add --git <url> [ref] [--alias <name>]`
+- `drago add --path <dir> [version] [--alias <name>]`
 - `drago remove <package>`
 - `drago install`
 - `drago install <package> [version]`
-- `drago install --git <url> [ref] --alias <name>`
-- `drago install --path <dir> [version] --alias <name>`
+- `drago install --git <url> [ref] [--alias <name>]`
+- `drago install --path <dir> [version] [--alias <name>]`
 - `drago update [dependency|drago|thagc|toolchain|all]`
 - `drago publish`
 - `drago fmt`
@@ -58,7 +58,8 @@ $THAGC build src/main.tg -o drago.bin
 `drago install <package> [version]` is an npm-style alias of `drago add <package> [version]` (add + install one dependency).
 `drago add --git ...` / `drago install --git ...` clone a git source into the local cache and record it in `drago.toml`.
 `drago add --path ...` / `drago install --path ...` copy a local source tree into the local cache and record it in `drago.toml`.
-External sources require `--alias <name>` and are rejected if that name already exists in the registry, to avoid ambiguous imports.
+External sources infer the dependency name from the repo/path leaf when possible; use `--alias <name>` to override it.
+External source names are rejected if they conflict with a registry package, to avoid ambiguous imports.
 `drago update <dependency>` updates one dependency (instead of all selected dependencies).
 `drago update drago` (or `drago update toolchain` / `drago update all`) runs `thagup` in default mode and updates both `drago` and `thagc`.
 `drago update thagc` runs `thagup --without-drago` and updates `thagc` only.

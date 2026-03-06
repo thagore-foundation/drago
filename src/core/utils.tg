@@ -1,3 +1,4 @@
+import std.list as list
 import std.string as str
 
 pub func is_empty(s: ptr) -> bool:
@@ -71,3 +72,11 @@ pub func is_valid_package_name(name: ptr) -> bool:
   if (str.str_has(s, "\\")):
     return false
   return true
+
+pub func source_leaf_name(text: ptr) -> ptr:
+  let parts = str.split(text, "/")
+  let n: i64 = list.list_count(parts)
+  if (n == 0):
+    return str.concat("", "")
+  let leaf = str.trim(list.list_get(parts, n - 1))
+  return str.replace(leaf, ".git", "")
