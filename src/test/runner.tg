@@ -51,7 +51,7 @@ pub func run_tests(project_root: ptr, quiet: i32, features: ptr, all_features: i
   let link_arg = str.concat("", env_link)
   if (utils.is_empty(env_link)):
     if (have_sqlite):
-      link_arg = str.concat("", " --link sqlite3")
+      link_arg = str.concat("", " --link-lib=sqlite3")
     else:
       link_arg = str.concat("", "")
       out.print_warning("sqlite3 not found (pkg-config). DB-related tests will be skipped (no failure).", quiet)
