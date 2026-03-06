@@ -4,7 +4,7 @@ import lib.process as process
 import std.list as list
 import std.string as str
 import src.deps.cache as cache
-import src.deps.registry as registry
+import src.deps.downloader as downloader
 import src.project.lockfile as lockfile
 import src.project.manifest as manifest
 
@@ -98,48 +98,60 @@ func test_external_sources() -> i32:
   if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " commit -m init"))) == 0):
     return 9
 
-  if (registry.reg_add_external_dependency(app_root, "pathdep", str.concat("", ""), "path", path_dep_root, 0, 1) == 0):
-    print("FAIL add path dependency")
+  if (downloader.install_path_package("pathdep", "0.3.0", path_dep_root) == 0):
+    print("FAIL install path dependency")
     return 10
-  if (registry.reg_add_external_dependency(app_root, "gitdep", "main", "git", git_dep_root, 0, 1) == 0):
-    print("FAIL add git dependency")
+  if (manifest.add_dependency(app_root, "pathdep", manifest.external_dep_spec("path", "0.3.0", path_dep_root)) == 0):
+    print("FAIL save path dependency")
     return 11
+  if (lockfile.upsert(app_root, "pathdep", "0.3.0", str.concat("path:", path_dep_root), str.concat("", "")) == 0):
+    print("FAIL lock path dependency")
+    return 12
+  if (downloader.install_git_package("gitdep", "main", git_dep_root, 0) == 0):
+    print("FAIL install git dependency")
+    return 13
+  if (manifest.add_dependency(app_root, "gitdep", manifest.external_dep_spec("git", "main", git_dep_root)) == 0):
+    print("FAIL save git dependency")
+    return 14
+  if (lockfile.upsert(app_root, "gitdep", "main", str.concat("git:", git_dep_root), str.concat("", "")) == 0):
+    print("FAIL lock git dependency")
+    return 15
 
   let deps = manifest.load_dependencies(app_root)
   let path_line = find_dep_line(deps, "pathdep")
   let git_line = find_dep_line(deps, "gitdep")
   if (expect_true(str.str_eq(manifest.dependency_source_kind(path_line), "path"), "path source kind") == 0):
-    return 12
+    return 16
   if (expect_true(str.str_eq(manifest.dependency_version_value(path_line), "0.3.0"), "path source version") == 0):
-    return 13
+    return 17
   if (expect_true(str.str_eq(manifest.dependency_source_kind(git_line), "git"), "git source kind") == 0):
-    return 14
+    return 18
   if (expect_true(str.str_eq(manifest.dependency_version_value(git_line), "main"), "git ref version") == 0):
-    return 15
+    return 19
 
   let locks = lockfile.load_lines(app_root)
   let path_lock = find_lock_line(locks, "pathdep")
   let git_lock = find_lock_line(locks, "gitdep")
   if (expect_true(str.str_eq(lockfile.pkg_source(path_lock), str.concat("path:", path_dep_root)), "path lock source") == 0):
-    return 16
+    return 20
   if (expect_true(str.str_eq(lockfile.pkg_source(git_lock), str.concat("git:", git_dep_root)), "git lock source") == 0):
-    return 17
+    return 21
 
   let cached_git_file = path.join(git_cache_root, "README.txt")
   if (expect_true(str.str_eq(str.trim(fs.read_file(cached_git_file)), "v1"), "git cache initial clone") == 0):
-    return 18
+    return 22
 
   fs.write_file(path.join(git_dep_root, "README.txt"), "v2\n")
   if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " add README.txt"))) == 0):
-    return 19
+    return 23
   if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " commit -m update"))) == 0):
-    return 20
+    return 24
 
-  if (registry.reg_install_all(app_root, "", 0, 0, 0, 1) == 0):
-    print("FAIL reinstall external dependencies")
-    return 21
+  if (downloader.install_git_package("gitdep", "main", git_dep_root, 0) == 0):
+    print("FAIL reinstall git dependency")
+    return 25
   if (expect_true(str.str_eq(str.trim(fs.read_file(cached_git_file)), "v2"), "git cache refresh on install") == 0):
-    return 22
+    return 26
 
   fs.remove_path(tmp)
   return 0
