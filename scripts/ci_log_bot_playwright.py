@@ -41,9 +41,9 @@ DEFAULT_REPO = "drago"
 DEFAULT_OUT = "logs.zip"
 
 
-async def find_latest_run(page) -> str:
+async def find_latest_run(page, actions_home: str) -> str:
     await page.goto("about:blank")
-    await page.goto(page.context.extra_http_headers.get("actions_home"))
+    await page.goto(actions_home)
     await page.wait_for_timeout(2000)
     link = await page.query_selector("a[href*='/actions/runs/']")
     if not link:
@@ -61,11 +61,10 @@ async def download_logs(owner: str, repo: str, run_id: str, out_path: str):
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context()
         actions_home = f"https://github.com/{owner}/{repo}/actions"
-        context.set_extra_http_headers({"actions_home": actions_home})
         page = await context.new_page()
 
         if not run_id:
-            run_id = await find_latest_run(page)
+            run_id = await find_latest_run(page, actions_home)
         run_url = f"https://github.com/{owner}/{repo}/actions/runs/{run_id}"
         await page.goto(run_url)
         await page.wait_for_timeout(2000)
