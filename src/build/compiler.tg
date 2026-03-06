@@ -156,20 +156,16 @@ pub func build_project(project_root: ptr, quiet: i32, verbose: i32, cli_features
   let sources = list.list_new()
   list.list_append(sources, entry)
   let changed = incremental.changed_sources(project_root, sources)
-  if ((list.list_count(changed) == 0) and (fs.exists(output_path) != 0)):
-    if (verbose != 0):
-      print("incremental: no source changes detected")
-    return 1
-  let cmd = linker.build_command(
-    entry,
-    output_path,
-    manifest.load_build_opt(project_root),
-    manifest.load_build_debug(project_root),
-    target_triple(project_root),
-    feature_csv,
-    include_list,
-    manifest.load_build_extra_flags(project_root)
-  )
+  if (list.list_count(changed) == 0):
+    if (fs.exists(output_path) != 0):
+      if (verbose != 0):
+        print("incremental: no source changes detected")
+      return 1
+  let build_opt = manifest.load_build_opt(project_root)
+  let build_debug = manifest.load_build_debug(project_root)
+  let build_target = target_triple(project_root)
+  let build_extra_flags = manifest.load_build_extra_flags(project_root)
+  let cmd = linker.build_command(entry, output_path, build_opt, build_debug, build_target, feature_csv, include_list, build_extra_flags)
   let raw = str.trim(process.capture(str.concat(cmd, stderr_quiet_redirect())))
   if (fs.exists(output_path) == 0):
     out.print_compiler_errors(raw)

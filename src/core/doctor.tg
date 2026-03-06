@@ -24,11 +24,11 @@ func doctor_check(ok: i32, message: ptr) -> i32:
 
 # Checks whether the registry host is reachable.
 func registry_reachable() -> i32:
-  let cmd = str.concat("curl -fsSL https://pkg.thagore.org >/dev/null", "")
-  if (str.str_eq(process.env("OS"), "Windows_NT")):
-    let ps = "powershell -NoProfile -Command \"try { Invoke-WebRequest -UseBasicParsing -Uri 'https://pkg.thagore.org' | Out-Null; exit 0 } catch { exit 1 }\""
-    return process.run(ps) == 0
-  return process.run(cmd) == 0
+  let url = str.concat("https:", str.concat("/", "/pkg.thagore.org"))
+  let cmd = str.concat("curl -fsSL ", url)
+  if (process.run(cmd) == 0):
+    return 1
+  return 0
 
 # Runs the `drago doctor` toolchain checks.
 pub func run() -> i32:
@@ -56,11 +56,14 @@ pub func run() -> i32:
   if (doctor_check(registry_reachable(), "registry reachable (pkg.thagore.org)") == 0):
     ok = 0
   let inc_path = incremental.cache_path(fs.getcwd())
-  if ((fs.exists(inc_path) != 0) or (fs.exists(path.join(fs.getcwd(), ".thagore")) == 0)):
+  if (fs.exists(inc_path) != 0):
     doctor_check(1, str.concat("incremental cache valid (", str.concat(inc_path, ")")))
   else:
-    doctor_check(0, str.concat("incremental cache valid (", str.concat(inc_path, ")")))
-    ok = 0
+    if (fs.exists(path.join(fs.getcwd(), ".thagore")) == 0):
+      doctor_check(1, str.concat("incremental cache valid (", str.concat(inc_path, ")")))
+    else:
+      doctor_check(0, str.concat("incremental cache valid (", str.concat(inc_path, ")")))
+      ok = 0
   if (ok != 0):
     print("")
     print("toolchain ok")
