@@ -47,7 +47,7 @@ pub func feature_cli_args(features: ptr, all_features: i32, no_default_features:
   out = str.concat(out, str.concat(" --features ", selected))
   return out
 
-pub func link_project(project_root: ptr, target_triple: ptr, quiet: i32, features: ptr, all_features: i32, no_default_features: i32) -> i32:
+pub func link_project(project_root: ptr, target_triple: ptr, extra_flags: ptr, quiet: i32, features: ptr, all_features: i32, no_default_features: i32) -> i32:
   let name = manifest.load_name(project_root)
   let entry_rel = manifest.load_entry(project_root)
   if (ensure_target_dir(project_root) == 0):
@@ -58,6 +58,8 @@ pub func link_project(project_root: ptr, target_triple: ptr, quiet: i32, feature
     fs.remove_path(out_bin)
   let entry = path.join(project_root, entry_rel)
   let cmd = str.concat(thagc_bin(), str.concat(" build ", str.concat(entry, str.concat(" -o ", out_bin))))
+  if (str.str_eq(extra_flags, "") == false):
+    cmd = str.concat(cmd, str.concat(" ", extra_flags))
   cmd = str.concat(cmd, feature_cli_args(features, all_features, no_default_features))
   if (str.str_eq(target_triple, "")):
     cmd = cmd

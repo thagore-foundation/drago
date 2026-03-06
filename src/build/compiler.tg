@@ -1,15 +1,17 @@
 import lib.process as process
 import std.string as str
 import src.build.linker as linker
+import src.project.manifest as manifest
 
 pub func thagc_version() -> ptr:
   return str.trim(process.capture(str.concat(linker.thagc_bin(), " --version")))
 
-pub func build_flags() -> ptr:
-  return str.concat("", "-O2")
+pub func build_flags(project_root: ptr) -> ptr:
+  let level = manifest.load_opt_level(project_root)
+  return str.concat("-O", level)
 
 pub func target_triple() -> ptr:
   return process.env("DRAGO_TARGET")
 
 pub func build_project(project_root: ptr, quiet: i32, features: ptr, all_features: i32, no_default_features: i32) -> i32:
-  return linker.link_project(project_root, target_triple(), quiet, features, all_features, no_default_features)
+  return linker.link_project(project_root, target_triple(), build_flags(project_root), quiet, features, all_features, no_default_features)

@@ -105,6 +105,27 @@ pub func load_license(project_root: ptr) -> ptr:
   toml.toml_free(h)
   return out
 
+pub func default_opt_level() -> ptr:
+  return str.concat("", "2")
+
+pub func load_opt_level(project_root: ptr) -> ptr:
+  let h = parse_handle(project_root)
+  if (map.map_is_null_ptr(h) == 1):
+    return default_opt_level()
+  let build_sec = toml.toml_get_section(h, "build")
+  if (map.map_is_null_ptr(build_sec) == 1):
+    toml.toml_free(h)
+    return default_opt_level()
+  let out = toml.toml_get_str(build_sec, "opt-level")
+  if (map.map_is_null_ptr(out) == 1):
+    toml.toml_free(h)
+    return default_opt_level()
+  if (utils.is_empty(out)):
+    toml.toml_free(h)
+    return default_opt_level()
+  toml.toml_free(h)
+  return out
+
 pub func load_authors(project_root: ptr) -> ptr:
   let h = parse_handle(project_root)
   if (map.map_is_null_ptr(h) == 1):
