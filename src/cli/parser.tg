@@ -138,6 +138,19 @@ pub func parse() -> ptr:
         alias = list.list_get(parts, 1)
       i = i + 1
       continue
+    if (str.str_eq(a, "--ref")):
+      if ((i + 1) < argc):
+        arg2 = process.argv(i + 1)
+        i = i + 2
+        continue
+      i = i + 1
+      continue
+    if (str.str_starts(a, "--ref=")):
+      let parts = str.split(a, "=")
+      if (list.list_count(parts) >= 2):
+        arg2 = list.list_get(parts, 1)
+      i = i + 1
+      continue
     if (str.str_eq(a, "-p")):
       if ((i + 1) < argc):
         package_name = process.argv(i + 1)

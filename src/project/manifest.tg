@@ -574,6 +574,10 @@ pub func dependency_source_value(dep_line: ptr) -> ptr:
 pub func dependency_version_value(dep_line: ptr) -> ptr:
   let spec = dependency_spec(dep_line)
   if (str.str_starts(spec, "{")):
+    if (str.str_eq(dependency_source_kind(dep_line), "git")):
+      let git_ref = dependency_inline_field(dep_line, "ref")
+      if (utils.is_empty(git_ref) == false):
+        return str.trim(git_ref)
     let version = dependency_inline_field(dep_line, "version")
     return str.trim(version)
   return strip_quote_pair(spec)
@@ -581,12 +585,23 @@ pub func dependency_version_value(dep_line: ptr) -> ptr:
 pub func registry_dep_spec(version: ptr) -> ptr:
   return str.concat("\"", str.concat(version, "\""))
 
+pub func dependency_ref_value(dep_line: ptr) -> ptr:
+  if (str.str_eq(dependency_source_kind(dep_line), "git") == false):
+    return str.concat("", "")
+  let git_ref = dependency_inline_field(dep_line, "ref")
+  if (utils.is_empty(git_ref) == false):
+    return str.trim(git_ref)
+  return dependency_inline_field(dep_line, "version")
+
 pub func external_dep_spec(kind: ptr, version: ptr, value: ptr) -> ptr:
-  let out = str.concat("{ version = \"", str.concat(version, "\""))
   if (str.str_eq(kind, "git")):
-    out = str.concat(out, str.concat(", git = \"", str.concat(value, "\"")))
-  else:
-    out = str.concat(out, str.concat(", path = \"", str.concat(value, "\"")))
+    let out = str.concat("{ git = \"", str.concat(value, "\""))
+    if (utils.is_empty(version) == false):
+      out = str.concat(out, str.concat(", ref = \"", str.concat(version, "\"")))
+    out = str.concat(out, " }")
+    return out
+  let out = str.concat("{ version = \"", str.concat(version, "\""))
+  out = str.concat(out, str.concat(", path = \"", str.concat(value, "\"")))
   out = str.concat(out, " }")
   return out
 

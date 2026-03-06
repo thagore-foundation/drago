@@ -113,7 +113,7 @@ func test_external_sources() -> i32:
   if (manifest.add_dependency(app_root, "gitdep", manifest.external_dep_spec("git", "main", git_dep_root)) == 0):
     print("FAIL save git dependency")
     return 14
-  if (lockfile.upsert(app_root, "gitdep", "main", str.concat("git:", git_dep_root), str.concat("", "")) == 0):
+  if (lockfile.upsert(app_root, "gitdep", "main", str.concat("git:", str.concat(git_dep_root, "::ref-main")), str.concat("", "")) == 0):
     print("FAIL lock git dependency")
     return 15
 
@@ -128,30 +128,33 @@ func test_external_sources() -> i32:
     return 18
   if (expect_true(str.str_eq(manifest.dependency_version_value(git_line), "main"), "git ref version") == 0):
     return 19
+  if (expect_true(str.str_eq(manifest.dependency_ref_value(git_line), "main"), "git ref field") == 0):
+    return 20
 
   let locks = lockfile.load_lines(app_root)
   let path_lock = find_lock_line(locks, "pathdep")
   let git_lock = find_lock_line(locks, "gitdep")
+  let expected_git_lock_source = str.concat("git:", str.concat(git_dep_root, "::ref-main"))
   if (expect_true(str.str_eq(lockfile.pkg_source(path_lock), str.concat("path:", path_dep_root)), "path lock source") == 0):
-    return 20
-  if (expect_true(str.str_eq(lockfile.pkg_source(git_lock), str.concat("git:", git_dep_root)), "git lock source") == 0):
     return 21
+  if (expect_true(str.str_eq(lockfile.pkg_source(git_lock), expected_git_lock_source), "git lock source") == 0):
+    return 22
 
   let cached_git_file = path.join(git_cache_root, "README.txt")
   if (expect_true(str.str_eq(str.trim(fs.read_file(cached_git_file)), "v1"), "git cache initial clone") == 0):
-    return 22
+    return 23
 
   fs.write_file(path.join(git_dep_root, "README.txt"), "v2\n")
   if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " add README.txt"))) == 0):
-    return 23
-  if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " commit -m update"))) == 0):
     return 24
+  if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " commit -m update"))) == 0):
+    return 25
 
   if (downloader.install_git_package("gitdep", "main", git_dep_root, 0) == 0):
     print("FAIL reinstall git dependency")
-    return 25
-  if (expect_true(str.str_eq(str.trim(fs.read_file(cached_git_file)), "v2"), "git cache refresh on install") == 0):
     return 26
+  if (expect_true(str.str_eq(str.trim(fs.read_file(cached_git_file)), "v2"), "git cache refresh on install") == 0):
+    return 27
 
   fs.remove_path(tmp)
   return 0

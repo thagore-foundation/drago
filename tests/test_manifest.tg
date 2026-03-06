@@ -15,7 +15,7 @@ func main() -> i32:
   let tmp = path.join(root, "tmp_manifest_test")
   let registry_version = str.concat("\"", str.concat("1.0.0", "\""))
   let git_url = str.concat("https:", str.concat("/", "/github.com/example/extlib.git"))
-  let expected_ext_line = str.concat("extlib = { version = \"", str.concat("v1.2.3\", git = \"", str.concat(git_url, "\" }")))
+  let expected_ext_line = str.concat("extlib = { git = \"", str.concat(git_url, str.concat("\", ref = \"", str.concat("v1.2.3", "\" }"))))
   let raw = str.concat("[package]\n", "")
   raw = str.concat(raw, "name = \"demo\"\n")
   raw = str.concat(raw, "version = \"0.1.0\"\n")
@@ -53,25 +53,28 @@ func main() -> i32:
   if (expect_true(str.str_eq(manifest.dependency_version_value(ext_line), "v1.2.3"), "version value") == 0):
     fs.remove_path(tmp)
     return 6
+  if (expect_true(str.str_eq(manifest.dependency_ref_value(ext_line), "v1.2.3"), "ref value") == 0):
+    fs.remove_path(tmp)
+    return 7
   let deps_after = manifest.load_dependencies(tmp)
   let preserved_line = list.list_get(deps_after, 1)
   if (expect_true(str.str_eq(manifest.dependency_source_kind(preserved_line), "path"), "preserve inline path dep") == 0):
     fs.remove_path(tmp)
-    return 7
+    return 8
   let saved = fs.read_file(path.join(tmp, "drago.toml"))
   if (expect_true(str.str_has(saved, "[features]"), "preserve features section") == 0):
     fs.remove_path(tmp)
-    return 8
+    return 9
   if (manifest.remove_dependency(tmp, "seed") == 0):
     print("manifest remove failed")
     fs.remove_path(tmp)
-    return 9
+    return 10
   let saved_after_remove = fs.read_file(path.join(tmp, "drago.toml"))
   if (expect_true(str.str_has(saved_after_remove, "[features]"), "preserve features after remove") == 0):
     fs.remove_path(tmp)
-    return 10
+    return 11
   if (expect_true(str.str_has(saved_after_remove, expected_ext_line), "preserve ext git dep after remove") == 0):
     fs.remove_path(tmp)
-    return 11
+    return 12
   fs.remove_path(tmp)
   return 0

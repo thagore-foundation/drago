@@ -131,7 +131,12 @@ pub func tier_warning(info: ptr):
   if (str.str_eq(tier, "unregistered")):
     print(str.concat("⚠ package ", str.concat(name, " is unregistered")))
 
-func external_source_id(source_kind: ptr, source_value: ptr) -> ptr:
+func external_source_id(source_kind: ptr, source_value: ptr, version: ptr) -> ptr:
+  if (str.str_eq(source_kind, "git")):
+    let out = str.concat(source_kind, str.concat(":", source_value))
+    if (utils.is_empty(version) == false):
+      out = str.concat(out, str.concat("::ref-", version))
+    return out
   return str.concat(source_kind, str.concat(":", source_value))
 
 func accept_external_sources(accept_yes: i32) -> i32:
@@ -202,7 +207,10 @@ func install_external_dependency(project_root: ptr, dep_name: ptr, version: ptr,
     let resolved_path = resolve_path_source(project_root, source_value)
     if (downloader.install_path_package(dep_name, version, resolved_path) == 0):
       return 0
-  if (lockfile.upsert(project_root, dep_name, version, external_source_id(source_kind, source_value), str.concat("", "")) == 0):
+  let lock_source = source_value
+  if (str.str_eq(source_kind, "path")):
+    lock_source = resolve_path_source(project_root, source_value)
+  if (lockfile.upsert(project_root, dep_name, version, external_source_id(source_kind, lock_source, version), str.concat("", "")) == 0):
     return 0
   return 1
 

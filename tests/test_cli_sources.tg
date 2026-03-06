@@ -1,0 +1,159 @@
+import lib.fs as fs
+import lib.path as path
+import lib.process as process
+import std.list as list
+import std.string as str
+import src.project.lockfile as lockfile
+import src.project.manifest as manifest
+
+func expect_true(ok: bool, label: ptr) -> i32:
+  if (ok):
+    return 1
+  print(str.concat("FAIL ", label))
+  return 0
+
+func quoted(text: ptr) -> ptr:
+  return str.concat("\"", str.concat(text, "\""))
+
+func shell_arg(text: ptr) -> ptr:
+  if (str.str_eq(process.env("OS"), "Windows_NT")):
+    return text
+  return quoted(text)
+
+func drago_bin(root: ptr) -> ptr:
+  let override = process.env("DRAGO_TEST_BIN")
+  if (str.str_eq(override, "") == false):
+    return override
+  if (str.str_eq(process.env("OS"), "Windows_NT")):
+    return path.join(root, "drago.exe")
+  return path.join(root, "drago.bin")
+
+func run_drago_in_dir(dir: ptr, drago: ptr, args: ptr) -> i32:
+  if (str.str_eq(process.env("OS"), "Windows_NT")):
+    let body = str.concat("cd /d ", str.concat(dir, str.concat(" && ", str.concat(drago, str.concat(" ", args)))))
+    let full = str.concat("cmd /c \"", str.concat(body, "\""))
+    return process.run(full)
+  let full = str.concat("cd ", str.concat(quoted(dir), str.concat(" && ", str.concat(quoted(drago), str.concat(" ", args)))))
+  return process.run(full)
+
+func write_basic_manifest(root: ptr, name: ptr, version: ptr) -> i32:
+  let raw = str.concat("[package]\n", "")
+  raw = str.concat(raw, str.concat("name = \"", str.concat(name, "\"\n")))
+  raw = str.concat(raw, str.concat("version = \"", str.concat(version, "\"\n")))
+  raw = str.concat(raw, "entry = \"src/main.tg\"\n")
+  raw = str.concat(raw, "description = \"\"\n")
+  raw = str.concat(raw, "license = \"MIT\"\n")
+  raw = str.concat(raw, "authors = \"\"\n\n")
+  raw = str.concat(raw, "[dependencies]\n")
+  return fs.write_file(path.join(root, "drago.toml"), raw)
+
+func run_cmd(cmd: ptr) -> i32:
+  let rc = process.run(cmd)
+  if (rc != 0):
+    print(str.concat("FAIL command: ", cmd))
+    return 0
+  return 1
+
+func find_dep_line(lines: ptr, dep_name: ptr) -> ptr:
+  let i: i64 = 0
+  let n = list.list_count(lines)
+  while (i < n):
+    let line = list.list_get(lines, i)
+    if (str.str_eq(manifest.dependency_name(line), dep_name)):
+      return line
+    i = i + 1
+  return str.concat("", "")
+
+func find_lock_line(lines: ptr, dep_name: ptr) -> ptr:
+  let i: i64 = 0
+  let n = list.list_count(lines)
+  while (i < n):
+    let line = list.list_get(lines, i)
+    if (str.str_eq(lockfile.pkg_name(line), dep_name)):
+      return line
+    i = i + 1
+  return str.concat("", "")
+
+func test_cli_sources() -> i32:
+  if (str.str_eq(process.env("OS"), "Windows_NT")):
+    print("SKIP cli source add test on Windows")
+    return 0
+  let cwd = fs.getcwd()
+  let tmp = path.join(cwd, "tmp_cli_sources_test")
+  let app_root = path.join(tmp, "app")
+  let path_dep_root = path.join(tmp, "pathcli")
+  let git_dep_root = path.join(tmp, "gitcli")
+  let drago = drago_bin(cwd)
+
+  fs.remove_path(tmp)
+  fs.mkdir(tmp)
+  fs.mkdir(app_root)
+  fs.mkdir(path_dep_root)
+  fs.mkdir(git_dep_root)
+
+  if (write_basic_manifest(app_root, "app", "0.1.0") == 0):
+    print("FAIL write app manifest")
+    return 1
+  if (write_basic_manifest(path_dep_root, "pathcli", "0.5.0") == 0):
+    print("FAIL write path manifest")
+    return 2
+  if (write_basic_manifest(git_dep_root, "gitcli", "0.6.0") == 0):
+    print("FAIL write git manifest")
+    return 3
+
+  fs.write_file(path.join(path_dep_root, "lib.tg"), "func main() -> i32:\n  return 0\n")
+  fs.write_file(path.join(git_dep_root, "README.txt"), "git-cli-v1\n")
+
+  if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " init"))) == 0):
+    return 4
+  if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " branch -M main"))) == 0):
+    return 5
+  if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " config user.email test@example.com"))) == 0):
+    return 6
+  if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " config user.name test-user"))) == 0):
+    return 7
+  if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " add ."))) == 0):
+    return 8
+  if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " commit -m init"))) == 0):
+    return 9
+
+  let add_path_args = str.concat("add --path ", str.concat(shell_arg(path_dep_root), " --alias pathcli --yes"))
+  if (run_drago_in_dir(app_root, drago, add_path_args) != 0):
+    print("FAIL drago add path")
+    return 10
+
+  let add_git_args = str.concat("add --git ", str.concat(shell_arg(git_dep_root), " --ref main --alias gitcli --yes"))
+  if (run_drago_in_dir(app_root, drago, add_git_args) != 0):
+    print("FAIL drago add git")
+    return 11
+
+  let deps = manifest.load_dependencies(app_root)
+  let path_line = find_dep_line(deps, "pathcli")
+  let git_line = find_dep_line(deps, "gitcli")
+  if (expect_true(str.str_eq(manifest.dependency_source_kind(path_line), "path"), "cli path source kind") == 0):
+    return 12
+  if (expect_true(str.str_eq(manifest.dependency_source_value(path_line), path_dep_root), "cli path source value") == 0):
+    return 13
+  if (expect_true(str.str_eq(manifest.dependency_version_value(path_line), "0.5.0"), "cli path version") == 0):
+    return 14
+  if (expect_true(str.str_eq(manifest.dependency_source_kind(git_line), "git"), "cli git source kind") == 0):
+    return 15
+  if (expect_true(str.str_eq(manifest.dependency_source_value(git_line), git_dep_root), "cli git source value") == 0):
+    return 16
+  if (expect_true(str.str_eq(manifest.dependency_ref_value(git_line), "main"), "cli git ref") == 0):
+    return 17
+
+  let locks = lockfile.load_lines(app_root)
+  let path_lock = find_lock_line(locks, "pathcli")
+  let git_lock = find_lock_line(locks, "gitcli")
+  let expected_git_lock_source = str.concat("git:", str.concat(git_dep_root, "::ref-main"))
+  if (expect_true(str.str_eq(lockfile.pkg_source(path_lock), str.concat("path:", path_dep_root)), "cli path lock source") == 0):
+    return 18
+  if (expect_true(str.str_eq(lockfile.pkg_source(git_lock), expected_git_lock_source), "cli git lock source") == 0):
+    return 19
+
+  fs.remove_path(tmp)
+  return 0
+
+func main() -> i32:
+  return test_cli_sources()
