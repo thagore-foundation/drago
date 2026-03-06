@@ -953,8 +953,8 @@ func main() -> i32:
   let root = project_root()
   if (verbose != 0):
     print(str.concat("drago root: ", root))
-  if (str.str_eq(cmd, "help") == 0):
-    if (str.str_eq(cmd, "version") == 0):
+  if (str.str_eq(cmd, "help") == false):
+    if (str.str_eq(cmd, "version") == false):
       if (enforce_mode_guards(cmd, arg1, locked, frozen, offline) == false):
         return 1
       let effective_locked = locked
@@ -975,13 +975,13 @@ func main() -> i32:
         if (verbose != 0):
           print("drago mode: locked")
 
-  if (str.str_eq(cmd, "help") != 0):
+  if (str.str_eq(cmd, "help")):
     usage()
     return 0
-  if (str.str_eq(cmd, "version") != 0):
+  if (str.str_eq(cmd, "version")):
     print(str.concat("drago ", drago_version()))
     return 0
-  if (str.str_eq(cmd, "new") != 0):
+  if (str.str_eq(cmd, "new")):
     if (scaffold.create_project(arg1) != 0):
       out.print_action("✨", str.concat("Created ", arg1), quiet)
       print("")
@@ -995,27 +995,27 @@ func main() -> i32:
       print("    drago run")
       return 0
     return 1
-  if (str.str_eq(cmd, "build") != 0):
+  if (str.str_eq(cmd, "build")):
     if (handle_build(root, quiet, package_name, features, all_features, no_default_features)):
       return 0
     return 1
-  if (str.str_eq(cmd, "run") != 0):
+  if (str.str_eq(cmd, "run")):
     if (handle_run(root, quiet, package_name, features, all_features, no_default_features)):
       return 0
     return 1
-  if (str.str_eq(cmd, "test") != 0):
+  if (str.str_eq(cmd, "test")):
     if (handle_test(root, quiet, package_name, features, all_features, no_default_features)):
       return 0
     return 1
-  if (str.str_eq(cmd, "add") != 0):
+  if (str.str_eq(cmd, "add")):
     if (handle_add(root, arg1, arg2, quiet, package_name, offline)):
       return 0
     return 1
-  if (str.str_eq(cmd, "remove") != 0):
+  if (str.str_eq(cmd, "remove")):
     if (handle_remove(root, arg1, quiet, package_name)):
       return 0
     return 1
-  if (str.str_eq(cmd, "install") != 0):
+  if (str.str_eq(cmd, "install")):
     if (utils.is_empty(arg1) == false):
       if (handle_add(root, arg1, arg2, quiet, package_name, offline)):
         return 0
@@ -1023,39 +1023,39 @@ func main() -> i32:
     if (handle_install(root, quiet, package_name, features, all_features, no_default_features, offline)):
       return 0
     return 1
-  if (str.str_eq(cmd, "update") != 0):
+  if (str.str_eq(cmd, "update")):
     if (handle_update(root, arg1, quiet, package_name, features, all_features, no_default_features, offline)):
       return 0
     return 1
-  if (str.str_eq(cmd, "publish") != 0):
+  if (str.str_eq(cmd, "publish")):
     if (handle_publish(root, quiet)):
       return 0
     return 1
-  if (str.str_eq(cmd, "fmt") != 0):
+  if (str.str_eq(cmd, "fmt")):
     if (handle_fmt(root, quiet)):
       return 0
     return 1
-  if (str.str_eq(cmd, "check") != 0):
+  if (str.str_eq(cmd, "check")):
     if (handle_check(root, quiet, package_name, features, all_features, no_default_features)):
       return 0
     return 1
-  if (str.str_eq(cmd, "cache") != 0):
+  if (str.str_eq(cmd, "cache")):
     if (handle_cache(arg1, quiet)):
       return 0
     return 1
-  if (str.str_eq(cmd, "audit") != 0):
+  if (str.str_eq(cmd, "audit")):
     if (handle_audit(root, quiet, offline)):
       return 0
     return 1
-  if (str.str_eq(cmd, "tree") != 0):
+  if (str.str_eq(cmd, "tree")):
     if (handle_tree(root, quiet, package_name, features, all_features, no_default_features)):
       return 0
     return 1
-  if (str.str_eq(cmd, "why") != 0):
+  if (str.str_eq(cmd, "why")):
     if (handle_why(root, arg1, quiet, package_name, features, all_features, no_default_features)):
       return 0
     return 1
-  if (str.str_eq(cmd, "outdated") != 0):
+  if (str.str_eq(cmd, "outdated")):
     if (handle_outdated(root, quiet, package_name, features, all_features, no_default_features, offline)):
       return 0
     return 1
