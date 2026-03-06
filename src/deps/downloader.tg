@@ -38,6 +38,7 @@ pub func install_package(name: ptr, version: ptr, repo: ptr, checksum: ptr, offl
     print("ERROR: cannot prepare cache directories")
     return 0
   let target_dir = cache.package_dir(name, version)
+  fs.mkdir(path.join(cache.packages_root(), name))
   if (str.str_eq(str.from_int(fs.exists(target_dir)), "1")):
     return 1
 
@@ -70,6 +71,40 @@ pub func install_package(name: ptr, version: ptr, repo: ptr, checksum: ptr, offl
     return 0
   if (str.str_eq(str.from_int(extract_archive(archive_path, target_dir)), "0")):
     print(str.concat("ERROR: extract failed for ", archive_name))
+    return 0
+  return 1
+
+pub func install_git_package(name: ptr, version: ptr, repo: ptr, offline_mode: i32) -> i32:
+  if (str.str_eq(str.from_int(cache.ensure_layout()), "0")):
+    print("ERROR: cannot prepare cache directories")
+    return 0
+  let target_dir = cache.package_dir(name, version)
+  fs.mkdir(path.join(cache.packages_root(), name))
+  if (str.str_eq(str.from_int(fs.exists(target_dir)), "1")):
+    return 1
+  let offline = process.env("DRAGO_OFFLINE")
+  let offline_enabled = offline_mode
+  if (str.str_eq(offline, "1")):
+    offline_enabled = 1
+  if (offline_enabled != 0):
+    print(str.concat("ERROR: package missing in offline mode: ", str.concat(name, str.concat("@", version))))
+    return 0
+  if (shell.clone_git(repo, version, target_dir) == 0):
+    print(str.concat("ERROR: git clone failed for ", repo))
+    return 0
+  return 1
+
+pub func install_path_package(name: ptr, version: ptr, src_dir: ptr) -> i32:
+  if (str.str_eq(str.from_int(cache.ensure_layout()), "0")):
+    print("ERROR: cannot prepare cache directories")
+    return 0
+  let target_dir = cache.package_dir(name, version)
+  fs.mkdir(path.join(cache.packages_root(), name))
+  if (str.str_eq(str.from_int(fs.exists(src_dir)), "0")):
+    print(str.concat("ERROR: path source not found: ", src_dir))
+    return 0
+  if (shell.copy_dir(src_dir, target_dir) == 0):
+    print(str.concat("ERROR: copy failed for ", src_dir))
     return 0
   return 1
 

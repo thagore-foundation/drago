@@ -26,10 +26,14 @@ func usage():
   print("  build")
   print("  run")
   print("  test")
-  print("  add <package> [version]                  add and install one dependency")
+  print("  add <package> [version]                  add and install one registry dependency")
+  print("  add --git <url> [ref] --alias <name>    add and install one git dependency")
+  print("  add --path <dir> [version] --alias <name> add and install one local path dependency")
   print("  remove <package>")
   print("  install                                  install all dependencies in manifest")
   print("  install <package> [version]              install one dependency (npm-style alias of add)")
+  print("  install --git <url> [ref] --alias <name> install one git dependency")
+  print("  install --path <dir> [version] --alias <name> install one local path dependency")
   print("  update                                   update all dependencies")
   print("  update <dependency>                      update one dependency")
   print("  update drago|toolchain|all               self-update drago + thagc")
@@ -173,11 +177,7 @@ func sync_workspace_lock(root: ptr, quiet: i32) -> i32:
   return 1
 
 func dep_version_text(dep_line: ptr) -> ptr:
-  let spec = manifest.dependency_spec(dep_line)
-  let out = str.trim(spec)
-  out = str.replace(out, "\"", "")
-  out = str.replace(out, "'", "")
-  return out
+  return manifest.dependency_version_value(dep_line)
 
 func is_self_update_target(name: ptr) -> i32:
   let t = str.trim(name)
@@ -752,18 +752,39 @@ func handle_run(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_fea
     return true
   return false
 
-func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32, package_name: ptr, offline: i32) -> bool:
-  if (utils.is_empty(pkg)):
-    out.print_error("add requires package name")
-    return false
+func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32, package_name: ptr, offline: i32, source_kind: ptr, source_value: ptr, source_alias: ptr, yes: i32) -> bool:
   let target_root = selected_single_member_root(root, quiet, package_name, "add")
   if (utils.is_empty(target_root)):
     return false
   let wanted = version
+  let started = time.now_ms()
+  if (utils.is_empty(source_kind) == false):
+    if (utils.is_empty(source_value)):
+      out.print_error("external source flag requires a value")
+      return false
+    let dep_name = source_alias
+    if (utils.is_empty(dep_name)):
+      out.print_error("external source requires --alias <name>")
+      return false
+    let title = str.concat(dep_name, str.concat(" <= ", source_value))
+    out.print_action("📦", str.concat("Adding ", title), quiet)
+    let add_external_rc = registry.reg_add_external_dependency(target_root, dep_name, wanted, source_kind, source_value, offline, yes)
+    if (add_external_rc == 0):
+      out.print_summary_fail("Add failed")
+      return false
+    if (sync_workspace_lock(root, quiet) == 0):
+      return false
+    let elapsed_external = time.now_ms() - started
+    out.print_done("Updated", "drago.toml", quiet)
+    out.print_done("Updated", "drago.lock", quiet)
+    print("")
+    out.print_summary_ok(str.concat("Added ", str.concat(title, str.concat(" ", out.format_ms(elapsed_external)))), quiet)
+    return true
+  if (utils.is_empty(pkg)):
+    out.print_error("add requires package name")
+    return false
   let title = pkg
-  if (utils.is_empty(wanted)):
-    title = pkg
-  else:
+  if (utils.is_empty(wanted) == false):
     title = str.concat(pkg, str.concat("@", wanted))
   out.print_action("📦", str.concat("Adding ", title), quiet)
   let info = registry.find_package(pkg, offline)
@@ -775,14 +796,10 @@ func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32, package_name: ptr
   else:
     out.print_warning(str.concat(pkg, " (unregistered - not published)"), quiet)
     print("     Not found in registry. Not reviewed yet.")
-    let yes = process.env("DRAGO_YES")
+    let env_yes = process.env("DRAGO_YES")
     print("     Continue? [y/N] y")
-    if (str.str_eq(yes, "1") == false):
+    if (str.str_eq(env_yes, "1") == false):
       print("     Tip: DRAGO_YES=1 is optional (useful for CI/non-interactive runs).")
-
-  if (utils.is_empty(wanted)):
-    wanted = str.concat("", "")
-  let started = time.now_ms()
   let add_rc = registry.reg_add_dependency(target_root, pkg, wanted, offline)
   if (add_rc == 0):
     out.print_summary_fail("Add failed")
@@ -817,7 +834,7 @@ func handle_remove(root: ptr, pkg: ptr, quiet: i32, package_name: ptr) -> bool:
   out.print_success(str.concat("Removed ", pkg), quiet)
   return true
 
-func handle_install(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32, offline: i32) -> bool:
+func handle_install(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32, offline: i32, yes: i32) -> bool:
   let members = selected_member_roots(root, quiet, package_name)
   let n = list.list_count(members)
   if (n == 0):
@@ -825,7 +842,7 @@ func handle_install(root: ptr, quiet: i32, package_name: ptr, features: ptr, all
   out.print_action("📦", "Installing dependencies", quiet)
   let i: i64 = 0
   while (i < n):
-    let install_rc = registry.reg_install_all(list.list_get(members, i), features, all_features, no_default_features, offline)
+    let install_rc = registry.reg_install_all(list.list_get(members, i), features, all_features, no_default_features, offline, yes)
     if (install_rc == 0):
       return false
     i = i + 1
@@ -834,7 +851,7 @@ func handle_install(root: ptr, quiet: i32, package_name: ptr, features: ptr, all
   out.print_summary_ok("Dependencies installed", quiet)
   return true
 
-func handle_update(root: ptr, dep_name: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32, offline: i32) -> bool:
+func handle_update(root: ptr, dep_name: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32, offline: i32, yes: i32) -> bool:
   if (is_self_update_target(dep_name) != 0):
     return handle_toolchain_update(dep_name, quiet, offline)
   let members = selected_member_roots(root, quiet, package_name)
@@ -844,7 +861,7 @@ func handle_update(root: ptr, dep_name: ptr, quiet: i32, package_name: ptr, feat
   out.print_action("📦", "Updating dependencies", quiet)
   let i: i64 = 0
   while (i < n):
-    let update_rc = registry.reg_update_all(list.list_get(members, i), features, all_features, no_default_features, dep_name, offline)
+    let update_rc = registry.reg_update_all(list.list_get(members, i), features, all_features, no_default_features, dep_name, offline, yes)
     if (update_rc == 0):
       return false
     i = i + 1
@@ -947,6 +964,10 @@ func main() -> i32:
   let locked = parser.parsed_locked(parsed)
   let frozen = parser.parsed_frozen(parsed)
   let offline_flag = parser.parsed_offline(parsed)
+  let source_kind = parser.parsed_source_kind(parsed)
+  let source_value = parser.parsed_source_value(parsed)
+  let source_alias = parser.parsed_alias(parsed)
+  let yes = parser.parsed_yes(parsed)
   let offline = offline_flag
   if (str.str_eq(process.env("DRAGO_OFFLINE"), "1")):
     offline = 1
@@ -1008,7 +1029,7 @@ func main() -> i32:
       return 0
     return 1
   if (str.str_eq(cmd, "add")):
-    if (handle_add(root, arg1, arg2, quiet, package_name, offline)):
+    if (handle_add(root, arg1, arg2, quiet, package_name, offline, source_kind, source_value, source_alias, yes)):
       return 0
     return 1
   if (str.str_eq(cmd, "remove")):
@@ -1016,15 +1037,19 @@ func main() -> i32:
       return 0
     return 1
   if (str.str_eq(cmd, "install")):
-    if (utils.is_empty(arg1) == false):
-      if (handle_add(root, arg1, arg2, quiet, package_name, offline)):
+    if (utils.is_empty(source_kind) == false):
+      if (handle_add(root, arg1, arg2, quiet, package_name, offline, source_kind, source_value, source_alias, yes)):
         return 0
       return 1
-    if (handle_install(root, quiet, package_name, features, all_features, no_default_features, offline)):
+    if (utils.is_empty(arg1) == false):
+      if (handle_add(root, arg1, arg2, quiet, package_name, offline, source_kind, source_value, source_alias, yes)):
+        return 0
+      return 1
+    if (handle_install(root, quiet, package_name, features, all_features, no_default_features, offline, yes)):
       return 0
     return 1
   if (str.str_eq(cmd, "update")):
-    if (handle_update(root, arg1, quiet, package_name, features, all_features, no_default_features, offline)):
+    if (handle_update(root, arg1, quiet, package_name, features, all_features, no_default_features, offline, yes)):
       return 0
     return 1
   if (str.str_eq(cmd, "publish")):

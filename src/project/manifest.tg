@@ -117,32 +117,15 @@ pub func load_authors(project_root: ptr) -> ptr:
   toml.toml_free(h)
   return out
 
-pub func parse_dependencies(section: ptr) -> ptr:
-  let out = list.list_new()
-  if (map.map_is_null_ptr(section) == 1):
-    return out
-  let keys = toml.toml_get_keys(section)
-  if (map.map_is_null_ptr(keys) == 1):
-    return out
-  let i: i64 = 0
-  let n = list.list_count(keys)
-  while (i < n):
-    let key = list.list_get(keys, i)
-    let value = toml.toml_get_str(section, key)
-    if (map.map_is_null_ptr(value) == 1):
-      value = str.concat("", "")
-    let line = str.concat(str.concat(key, " = "), str.concat("\"", str.concat(value, "\"")))
-    list.list_append(out, line)
-    i = i + 1
-  return out
-
 pub func load_dependencies(project_root: ptr) -> ptr:
-  let h = parse_handle(project_root)
-  if (map.map_is_null_ptr(h) == 1):
-    return list.list_new()
-  let deps = toml.toml_get_section(h, "dependencies")
-  let out = parse_dependencies(deps)
-  toml.toml_free(h)
+  let meta = collect_dependency_meta(project_root)
+  let out = list.list_new()
+  let i: i64 = 0
+  let n = list.list_count(meta)
+  while (i < n):
+    let line = list.list_get(meta, i)
+    list.list_append(out, str.concat(str.concat(dep_meta_name(line), " = "), dep_meta_spec(line)))
+    i = i + 1
   return out
 
 func append_all(dst: ptr, src: ptr):
@@ -309,7 +292,7 @@ func list_append_unique(items: ptr, value: ptr) -> i32:
   list.list_append(items, value)
   return 1
 
-func dep_meta_line(name: ptr, version: ptr, optional: i32, default_features: i32) -> ptr:
+func dep_meta_line(name: ptr, spec: ptr, optional: i32, default_features: i32) -> ptr:
   let opt = "0"
   if (optional != 0):
     opt = "1"
@@ -317,7 +300,7 @@ func dep_meta_line(name: ptr, version: ptr, optional: i32, default_features: i32
   if (default_features != 0):
     def = "1"
   let out = str.concat(name, "|")
-  out = str.concat(out, version)
+  out = str.concat(out, spec)
   out = str.concat(out, "|")
   out = str.concat(out, opt)
   out = str.concat(out, "|")
@@ -335,7 +318,7 @@ func dep_meta_part(line: ptr, idx: i64) -> ptr:
 func dep_meta_name(line: ptr) -> ptr:
   return dep_meta_part(line, 0)
 
-func dep_meta_version(line: ptr) -> ptr:
+func dep_meta_spec(line: ptr) -> ptr:
   return dep_meta_part(line, 1)
 
 func dep_meta_optional(line: ptr) -> i32:
@@ -360,6 +343,54 @@ func inline_field(raw_inline: ptr, field_name: ptr) -> ptr:
     i = i + 1
   return str.concat("", "")
 
+func parse_dependency_spec_text(raw_line: ptr) -> ptr:
+  let rhs = kv_value(raw_line)
+  if (utils.is_empty(rhs)):
+    return str.concat("", "")
+  return str.trim(rhs)
+
+pub func dependency_inline_field(dep_line: ptr, field_name: ptr) -> ptr:
+  let spec = dependency_spec(dep_line)
+  if (str.str_starts(spec, "{") == false):
+    return str.concat("", "")
+  return strip_quote_pair(inline_field(spec, field_name))
+
+pub func dependency_source_kind(dep_line: ptr) -> ptr:
+  let git = dependency_inline_field(dep_line, "git")
+  if (utils.is_empty(git) == false):
+    return str.concat("", "git")
+  let local_path = dependency_inline_field(dep_line, "path")
+  if (utils.is_empty(local_path) == false):
+    return str.concat("", "path")
+  return str.concat("", "registry")
+
+pub func dependency_source_value(dep_line: ptr) -> ptr:
+  let kind = dependency_source_kind(dep_line)
+  if (str.str_eq(kind, "git")):
+    return dependency_inline_field(dep_line, "git")
+  if (str.str_eq(kind, "path")):
+    return dependency_inline_field(dep_line, "path")
+  return str.concat("", "")
+
+pub func dependency_version_value(dep_line: ptr) -> ptr:
+  let spec = dependency_spec(dep_line)
+  if (str.str_starts(spec, "{")):
+    let version = dependency_inline_field(dep_line, "version")
+    return str.trim(version)
+  return strip_quote_pair(spec)
+
+pub func registry_dep_spec(version: ptr) -> ptr:
+  return str.concat("\"", str.concat(version, "\""))
+
+pub func external_dep_spec(kind: ptr, version: ptr, value: ptr) -> ptr:
+  let out = str.concat("{ version = \"", str.concat(version, "\""))
+  if (str.str_eq(kind, "git")):
+    out = str.concat(out, str.concat(", git = \"", str.concat(value, "\"")))
+  else:
+    out = str.concat(out, str.concat(", path = \"", str.concat(value, "\"")))
+  out = str.concat(out, " }")
+  return out
+
 func parse_dependency_meta_line(raw_line: ptr) -> ptr:
   let line = str.trim(raw_line)
   if (utils.is_empty(line)):
@@ -371,20 +402,17 @@ func parse_dependency_meta_line(raw_line: ptr) -> ptr:
   if (utils.is_empty(rhs)):
     return str.concat("", "")
 
-  let version = str.concat("", "")
+  let spec = parse_dependency_spec_text(line)
   let optional = 0
   let default_features = 1
   if (str.str_starts(rhs, "{")):
-    version = strip_quote_pair(inline_field(rhs, "version"))
     let opt = str.trim(inline_field(rhs, "optional"))
     if (str.str_eq(opt, "true")):
       optional = 1
     let defv = str.trim(inline_field(rhs, "default-features"))
     if (str.str_eq(defv, "false")):
       default_features = 0
-  else:
-    version = strip_quote_pair(rhs)
-  return dep_meta_line(name, version, optional, default_features)
+  return dep_meta_line(name, spec, optional, default_features)
 
 func collect_dependency_meta(project_root: ptr) -> ptr:
   let out = list.list_new()
@@ -586,13 +614,13 @@ pub func load_dependencies_for_features(project_root: ptr, feature_csv: ptr, all
   while (i < n):
     let d = list.list_get(meta, i)
     let name = dep_meta_name(d)
-    let version = dep_meta_version(d)
+    let spec = dep_meta_spec(d)
     let optional = dep_meta_optional(d)
     let include = 1
     if (optional != 0):
       include = list_contains(enabled_optional_deps, name)
     if (include != 0):
-      let line = str.concat(str.concat(name, " = "), str.concat("\"", str.concat(version, "\"")))
+      let line = str.concat(str.concat(name, " = "), spec)
       list.list_append(out, line)
     i = i + 1
   return out
@@ -637,51 +665,103 @@ pub func dependency_spec(dep_line: ptr) -> ptr:
     return str.concat("", "")
   return str.trim(list.list_get(parts, 1))
 
+func dependency_entry_line(dep_name: ptr, dep_spec: ptr) -> ptr:
+  return str.concat(str.concat(dep_name, " = "), dep_spec)
+
+func save_manifest_lines(project_root: ptr, lines: ptr) -> i32:
+  let out = str.concat("", "")
+  let i: i64 = 0
+  let n = list.list_count(lines)
+  while (i < n):
+    out = str.concat(out, list.list_get(lines, i))
+    if (i < (n - 1)):
+      out = str.concat(out, "\n")
+    i = i + 1
+  return fs.write_file(manifest_path(project_root), out)
+
+func dependency_lines_updated(project_root: ptr, dep_name: ptr, dep_spec: ptr, remove_only: i32) -> ptr:
+  let p = manifest_path(project_root)
+  let raw = fs.read_file(p)
+  let out = list.list_new()
+  if (map.map_is_null_ptr(raw) == 1):
+    if (remove_only != 0):
+      return out
+    list.list_append(out, "[package]")
+    list.list_append(out, str.concat("name = \"", str.concat(default_name(), "\"")))
+    list.list_append(out, str.concat("version = \"", str.concat(default_version(), "\"")))
+    list.list_append(out, str.concat("entry = \"", str.concat(default_entry(), "\"")))
+    list.list_append(out, str.concat("description = \"", str.concat(default_description(), "\"")))
+    list.list_append(out, str.concat("license = \"", str.concat(default_license(), "\"")))
+    list.list_append(out, str.concat("authors = \"", str.concat(default_authors(), "\"")))
+    list.list_append(out, "")
+    list.list_append(out, "[dependencies]")
+    list.list_append(out, dependency_entry_line(dep_name, dep_spec))
+    return out
+  let lines = str.split(raw, "\n")
+  if (map.map_is_null_ptr(lines) == 1):
+    return out
+
+  let in_deps = 0
+  let saw_deps = 0
+  let applied = 0
+  let i: i64 = 0
+  let n = list.list_count(lines)
+  while (i < n):
+    let raw_line = list.list_get(lines, i)
+    let line = str.trim(raw_line)
+    if (in_deps != 0):
+      if (str.str_starts(line, "[")):
+        if (remove_only == 0):
+          if (applied == 0):
+            list.list_append(out, dependency_entry_line(dep_name, dep_spec))
+            applied = 1
+        in_deps = 0
+        list.list_append(out, raw_line)
+        i = i + 1
+        continue
+      if (utils.is_empty(line)):
+        list.list_append(out, raw_line)
+        i = i + 1
+        continue
+      if (str.str_eq(dependency_name(line), dep_name)):
+        if (remove_only == 0):
+          list.list_append(out, dependency_entry_line(dep_name, dep_spec))
+        applied = 1
+        i = i + 1
+        continue
+      list.list_append(out, raw_line)
+      i = i + 1
+      continue
+    list.list_append(out, raw_line)
+    if (str.str_eq(line, "[dependencies]")):
+      in_deps = 1
+      saw_deps = 1
+    i = i + 1
+
+  if (in_deps != 0):
+    if (remove_only == 0):
+      if (applied == 0):
+        list.list_append(out, dependency_entry_line(dep_name, dep_spec))
+    return out
+
+  if (remove_only != 0):
+    return out
+  if (saw_deps == 0):
+    if (list.list_count(out) != 0):
+      let last_line = str.trim(list.list_get(out, list.list_count(out) - 1))
+      if (utils.is_empty(last_line) == false):
+        list.list_append(out, "")
+    list.list_append(out, "[dependencies]")
+    list.list_append(out, dependency_entry_line(dep_name, dep_spec))
+  return out
+
 pub func add_dependency(project_root: ptr, dep_name: ptr, dep_spec: ptr) -> i32:
   if (utils.is_valid_package_name(dep_name) == false):
     print(str.concat("ERROR: invalid dependency name `", str.concat(dep_name, "` — use only letters, digits, `_`, or `-` (no dots)")))
     return 0
-  let name = load_name(project_root)
-  let version = load_version(project_root)
-  let entry = load_entry(project_root)
-  let description = load_description(project_root)
-  let license = load_license(project_root)
-  let authors = load_authors(project_root)
-  let dependencies = load_dependencies(project_root)
-
-  let out = list.list_new()
-  let i: i64 = 0
-  let n = list.list_count(dependencies)
-  let replaced = 0
-  while (i < n):
-    let line = list.list_get(dependencies, i)
-    if (str.str_eq(dependency_name(line), dep_name)):
-      list.list_append(out, str.concat(str.concat(dep_name, " = "), dep_spec))
-      replaced = 1
-    else:
-      list.list_append(out, line)
-    i = i + 1
-  if (replaced == 0):
-    list.list_append(out, str.concat(str.concat(dep_name, " = "), dep_spec))
-  return save(project_root, name, version, entry, description, license, authors, out)
+  return save_manifest_lines(project_root, dependency_lines_updated(project_root, dep_name, dep_spec, 0))
 
 pub func remove_dependency(project_root: ptr, dep_name: ptr) -> i32:
-  let name = load_name(project_root)
-  let version = load_version(project_root)
-  let entry = load_entry(project_root)
-  let description = load_description(project_root)
-  let license = load_license(project_root)
-  let authors = load_authors(project_root)
-  let dependencies = load_dependencies(project_root)
-
-  let out = list.list_new()
-  let i: i64 = 0
-  let n = list.list_count(dependencies)
-  while (i < n):
-    let line = list.list_get(dependencies, i)
-    if (str.str_eq(dependency_name(line), dep_name)):
-      i = i + 1
-      continue
-    list.list_append(out, line)
-    i = i + 1
-  return save(project_root, name, version, entry, description, license, authors, out)
+  if (fs.exists(manifest_path(project_root)) == 0):
+    return 1
+  return save_manifest_lines(project_root, dependency_lines_updated(project_root, dep_name, str.concat("", ""), 1))

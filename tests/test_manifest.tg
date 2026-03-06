@@ -1,18 +1,77 @@
 import src.project.manifest as manifest
 import lib.fs as fs
 import lib.path as path
+import std.list as list
 import std.string as str
+
+func expect_true(ok: bool, label: ptr) -> i32:
+  if (ok):
+    return 1
+  print(str.concat("FAIL ", label))
+  return 0
 
 func main() -> i32:
   let root = "."
   let tmp = path.join(root, "tmp_manifest_test")
+  let registry_version = str.concat("\"", str.concat("1.0.0", "\""))
+  let git_url = str.concat("https:", str.concat("/", "/github.com/example/extlib.git"))
+  let expected_ext_line = str.concat("extlib = { version = \"", str.concat("v1.2.3\", git = \"", str.concat(git_url, "\" }")))
+  let raw = str.concat("[package]\n", "")
+  raw = str.concat(raw, "name = \"demo\"\n")
+  raw = str.concat(raw, "version = \"0.1.0\"\n")
+  raw = str.concat(raw, "entry = \"src/main.tg\"\n")
+  raw = str.concat(raw, "description = \"\"\n")
+  raw = str.concat(raw, "license = \"MIT\"\n")
+  raw = str.concat(raw, "authors = \"\"\n\n")
+  raw = str.concat(raw, "[dependencies]\n")
+  raw = str.concat(raw, str.concat("http = ", str.concat(registry_version, "\n")))
+  raw = str.concat(raw, "seed = { version = \"0.2.0\", path = \"vendor/seed\" }\n\n")
+  raw = str.concat(raw, "[features]\n")
+  raw = str.concat(raw, "default = [\"dep:seed\"]\n")
   fs.mkdir(tmp)
-  let ok = manifest.add_dependency(tmp, "http", "\"1.0.0\"")
+  fs.write_file(path.join(tmp, "drago.toml"), raw)
+  let ok = 1
   if (ok == 0):
     print("manifest add failed")
     return 1
   let name = manifest.load_name(tmp)
   if (str.str_eq(name, "")):
     return 2
+  let ok_ext = manifest.add_dependency(tmp, "extlib", manifest.external_dep_spec("git", "v1.2.3", git_url))
+  if (ok_ext == 0):
+    print("manifest add external failed")
+    fs.remove_path(tmp)
+    return 3
+  let deps = manifest.load_dependencies_for_features(tmp, "", 0, 0)
+  let ext_line = list.list_get(deps, 1)
+  if (expect_true(str.str_eq(manifest.dependency_source_kind(ext_line), "git"), "source kind git") == 0):
+    fs.remove_path(tmp)
+    return 4
+  if (expect_true(str.str_eq(manifest.dependency_source_value(ext_line), git_url), "source value git") == 0):
+    fs.remove_path(tmp)
+    return 5
+  if (expect_true(str.str_eq(manifest.dependency_version_value(ext_line), "v1.2.3"), "version value") == 0):
+    fs.remove_path(tmp)
+    return 6
+  let deps_after = manifest.load_dependencies(tmp)
+  let preserved_line = list.list_get(deps_after, 1)
+  if (expect_true(str.str_eq(manifest.dependency_source_kind(preserved_line), "path"), "preserve inline path dep") == 0):
+    fs.remove_path(tmp)
+    return 7
+  let saved = fs.read_file(path.join(tmp, "drago.toml"))
+  if (expect_true(str.str_has(saved, "[features]"), "preserve features section") == 0):
+    fs.remove_path(tmp)
+    return 8
+  if (manifest.remove_dependency(tmp, "seed") == 0):
+    print("manifest remove failed")
+    fs.remove_path(tmp)
+    return 9
+  let saved_after_remove = fs.read_file(path.join(tmp, "drago.toml"))
+  if (expect_true(str.str_has(saved_after_remove, "[features]"), "preserve features after remove") == 0):
+    fs.remove_path(tmp)
+    return 10
+  if (expect_true(str.str_has(saved_after_remove, expected_ext_line), "preserve ext git dep after remove") == 0):
+    fs.remove_path(tmp)
+    return 11
   fs.remove_path(tmp)
   return 0

@@ -99,3 +99,33 @@ pub func untar(archive_path: ptr, dest_dir: ptr) -> i32:
       return 0
   let cmd = str.concat("tar -xzf \"", str.concat(archive_path, str.concat("\" --strip-components=1 -C \"", str.concat(dest_dir, "\""))))
   return process.run(cmd)
+
+pub func clone_git(url: ptr, git_ref: ptr, dest_dir: ptr) -> i32:
+  if (fs.exists(dest_dir) != 0):
+    fs.remove_path(dest_dir)
+  if (is_windows() == false):
+    let cmd = str.concat("git clone --depth 1 ", str.concat(sh_quote(url), str.concat(" ", sh_quote(dest_dir))))
+    let rc = process.run(cmd)
+    if (rc != 0):
+      return rc
+    if (utils.is_empty(git_ref)):
+      return 1
+    let checkout = str.concat("git -C ", str.concat(sh_quote(dest_dir), str.concat(" checkout ", sh_quote(git_ref))))
+    return process.run(checkout)
+  let clone_ps = str.concat("& { git clone --depth 1 ", str.concat(ps_quote(url), str.concat(" ", str.concat(ps_quote(dest_dir), " | Out-Null }"))))
+  let rc = process.run(wrap_ps(clone_ps))
+  if (rc != 0):
+    return rc
+  if (utils.is_empty(git_ref)):
+    return 1
+  let checkout_ps = str.concat("& { git -C ", str.concat(ps_quote(dest_dir), str.concat(" checkout ", str.concat(ps_quote(git_ref), " | Out-Null }"))))
+  return process.run(wrap_ps(checkout_ps))
+
+pub func copy_dir(src_dir: ptr, dest_dir: ptr) -> i32:
+  if (fs.exists(dest_dir) != 0):
+    fs.remove_path(dest_dir)
+  if (is_windows() == false):
+    let cmd = str.concat("cp -R ", str.concat(sh_quote(src_dir), str.concat(" ", sh_quote(dest_dir))))
+    return process.run(cmd)
+  let ps = str.concat("& { Copy-Item -Path ", str.concat(ps_quote(src_dir), str.concat(" -Destination ", str.concat(ps_quote(dest_dir), " -Recurse -Force }"))))
+  return process.run(wrap_ps(ps))

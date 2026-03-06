@@ -27,9 +27,13 @@ $THAGC build src/main.tg -o drago.bin
 - `drago run`
 - `drago test`
 - `drago add <package> [version]`
+- `drago add --git <url> [ref] --alias <name>`
+- `drago add --path <dir> [version] --alias <name>`
 - `drago remove <package>`
 - `drago install`
 - `drago install <package> [version]`
+- `drago install --git <url> [ref] --alias <name>`
+- `drago install --path <dir> [version] --alias <name>`
 - `drago update [dependency|drago|thagc|toolchain|all]`
 - `drago publish`
 - `drago fmt`
@@ -52,6 +56,9 @@ $THAGC build src/main.tg -o drago.bin
 `--package` selects one workspace member by package name or member path.
 `drago install` installs all dependencies declared in `drago.toml`.
 `drago install <package> [version]` is an npm-style alias of `drago add <package> [version]` (add + install one dependency).
+`drago add --git ...` / `drago install --git ...` clone a git source into the local cache and record it in `drago.toml`.
+`drago add --path ...` / `drago install --path ...` copy a local source tree into the local cache and record it in `drago.toml`.
+External sources require `--alias <name>` and are rejected if that name already exists in the registry, to avoid ambiguous imports.
 `drago update <dependency>` updates one dependency (instead of all selected dependencies).
 `drago update drago` (or `drago update toolchain` / `drago update all`) runs `thagup` in default mode and updates both `drago` and `thagc`.
 `drago update thagc` runs `thagup --without-drago` and updates `thagc` only.
@@ -59,6 +66,11 @@ Self-update uses `thagup.sh` on POSIX and `thagup.ps1` on Windows.
 `--locked` blocks commands that would modify `drago.lock` and fails if lockfile is out of sync for build/read commands.
 `--frozen` implies lockfile immutability and requires offline mode (`--offline` or `DRAGO_OFFLINE=1`) for networked commands.
 `--offline` disables network fetches for registry/package resolution and relies on local cache/file-based registry.
+
+External source installs are treated as unreviewed code. Drago prints a risk warning and requires either:
+
+- `--yes`
+- `DRAGO_ACCEPT_RISK=1`
 
 ## Workspace
 
@@ -114,6 +126,7 @@ export DRAGO_REGISTRY_BASE="file:///media/lehungquangminh/QM_SSD/drago/registry"
 - `DRAGO_BUILD_FLAGS`: build flags fingerprint for cache metadata
 - `DRAGO_OFFLINE=1`: block network download and use local cache only
 - `DRAGO_REGISTRY_BASE`: registry base URL override
+- `DRAGO_ACCEPT_RISK=1`: accept git/path dependency risk prompts for non-interactive installs
 - `GITHUB_TOKEN`: required for `drago publish`
 - `DRAGO_UPDATE_DRY_RUN=1`: pass `--dry-run` to `thagup` for self-update preview
 - `DRAGO_THAGC_TAG`: pass `--tag <value>` to `thagup`

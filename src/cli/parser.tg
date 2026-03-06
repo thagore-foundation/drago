@@ -51,6 +51,9 @@ pub func parse() -> ptr:
   let kind = str.concat("", "help")
   let arg1 = str.concat("", "")
   let arg2 = str.concat("", "")
+  let source_kind = str.concat("", "")
+  let source_value = str.concat("", "")
+  let alias = str.concat("", "")
   let package_name = str.concat("", "")
   let features = str.concat("", "")
   let quiet = 0
@@ -60,6 +63,7 @@ pub func parse() -> ptr:
   let locked = 0
   let frozen = 0
   let offline = 0
+  let yes = 0
   let seen_cmd = 0
 
   let i = 1
@@ -83,6 +87,53 @@ pub func parse() -> ptr:
       continue
     if (str.str_eq(a, "--offline")):
       offline = 1
+      i = i + 1
+      continue
+    if (str.str_eq(a, "--yes")):
+      yes = 1
+      i = i + 1
+      continue
+    if (str.str_eq(a, "--git")):
+      source_kind = str.concat("", "git")
+      if ((i + 1) < argc):
+        source_value = process.argv(i + 1)
+        i = i + 2
+        continue
+      i = i + 1
+      continue
+    if (str.str_starts(a, "--git=")):
+      let parts = str.split(a, "=")
+      if (list.list_count(parts) >= 2):
+        source_kind = str.concat("", "git")
+        source_value = list.list_get(parts, 1)
+      i = i + 1
+      continue
+    if (str.str_eq(a, "--path")):
+      source_kind = str.concat("", "path")
+      if ((i + 1) < argc):
+        source_value = process.argv(i + 1)
+        i = i + 2
+        continue
+      i = i + 1
+      continue
+    if (str.str_starts(a, "--path=")):
+      let parts = str.split(a, "=")
+      if (list.list_count(parts) >= 2):
+        source_kind = str.concat("", "path")
+        source_value = list.list_get(parts, 1)
+      i = i + 1
+      continue
+    if (str.str_eq(a, "--alias")):
+      if ((i + 1) < argc):
+        alias = process.argv(i + 1)
+        i = i + 2
+        continue
+      i = i + 1
+      continue
+    if (str.str_starts(a, "--alias=")):
+      let parts = str.split(a, "=")
+      if (list.list_count(parts) >= 2):
+        alias = list.list_get(parts, 1)
       i = i + 1
       continue
     if (str.str_eq(a, "-p")):
@@ -166,7 +217,26 @@ pub func parse() -> ptr:
   let of = str.concat("", "0")
   if (offline != 0):
     of = str.concat("", "1")
-  return str.concat(kind, str.concat("|", str.concat(arg1, str.concat("|", str.concat(arg2, str.concat("|", str.concat(q, str.concat("|", str.concat(v, str.concat("|", str.concat(package_name, str.concat("|", str.concat(features, str.concat("|", str.concat(af, str.concat("|", str.concat(ndf, str.concat("|", str.concat(lk, str.concat("|", str.concat(fr, str.concat("|", of))))))))))))))))))))))
+  let ys = str.concat("", "0")
+  if (yes != 0):
+    ys = str.concat("", "1")
+  let out = kind
+  out = str.concat(out, str.concat("|", arg1))
+  out = str.concat(out, str.concat("|", arg2))
+  out = str.concat(out, str.concat("|", q))
+  out = str.concat(out, str.concat("|", v))
+  out = str.concat(out, str.concat("|", package_name))
+  out = str.concat(out, str.concat("|", features))
+  out = str.concat(out, str.concat("|", af))
+  out = str.concat(out, str.concat("|", ndf))
+  out = str.concat(out, str.concat("|", lk))
+  out = str.concat(out, str.concat("|", fr))
+  out = str.concat(out, str.concat("|", of))
+  out = str.concat(out, str.concat("|", source_kind))
+  out = str.concat(out, str.concat("|", source_value))
+  out = str.concat(out, str.concat("|", alias))
+  out = str.concat(out, str.concat("|", ys))
+  return out
 
 pub func part(parsed: ptr, idx: i64) -> ptr:
   let parts = str.split(parsed, "|")
@@ -221,5 +291,19 @@ pub func parsed_frozen(parsed: ptr) -> i32:
 
 pub func parsed_offline(parsed: ptr) -> i32:
   if (str.str_eq(part(parsed, 11), "1")):
+    return 1
+  return 0
+
+pub func parsed_source_kind(parsed: ptr) -> ptr:
+  return part(parsed, 12)
+
+pub func parsed_source_value(parsed: ptr) -> ptr:
+  return part(parsed, 13)
+
+pub func parsed_alias(parsed: ptr) -> ptr:
+  return part(parsed, 14)
+
+pub func parsed_yes(parsed: ptr) -> i32:
+  if (str.str_eq(part(parsed, 15), "1")):
     return 1
   return 0

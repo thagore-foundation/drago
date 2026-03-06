@@ -1,5 +1,6 @@
 import lib.fs as fs
 import lib.map as map
+import lib.path as path
 import lib.process as process
 import std.list as list
 import std.string as str
@@ -130,7 +131,42 @@ pub func tier_warning(info: ptr):
   if (str.str_eq(tier, "unregistered")):
     print(str.concat("⚠ package ", str.concat(name, " is unregistered")))
 
-pub func reg_add_dependency(project_root: ptr, pkg: ptr, requested_version: ptr, offline_mode: i32) -> i32:
+func external_source_id(source_kind: ptr, source_value: ptr) -> ptr:
+  return str.concat(source_kind, str.concat(":", source_value))
+
+func accept_external_sources(accept_yes: i32) -> i32:
+  if (accept_yes != 0):
+    return 1
+  if (str.str_eq(process.env("DRAGO_ACCEPT_RISK"), "1")):
+    return 1
+  if (str.str_eq(process.env("DRAGO_YES"), "1")):
+    return 1
+  return 0
+
+func warn_external_source(dep_name: ptr, source_kind: ptr, source_value: ptr) -> i32:
+  print(str.concat("WARNING: external source requested for ", dep_name))
+  print(str.concat("  kind: ", source_kind))
+  print(str.concat("  value: ", source_value))
+  print("  not reviewed by registry; imports may be unstable or malicious")
+  print("  rerun with --yes or DRAGO_ACCEPT_RISK=1 to continue")
+  return 0
+
+func registry_name_conflict(dep_name: ptr, offline_mode: i32) -> i32:
+  let info = find_package(dep_name, offline_mode)
+  if (str.str_eq(info_found(info), "1")):
+    return 1
+  return 0
+
+func resolve_path_source(project_root: ptr, source_value: ptr) -> ptr:
+  if (utils.utils_starts_with(source_value, "/")):
+    return source_value
+  if (utils.utils_starts_with(source_value, "\\")):
+    return source_value
+  if (str.str_has(source_value, ":")):
+    return source_value
+  return path.join(project_root, source_value)
+
+func install_registry_dependency(project_root: ptr, pkg: ptr, requested_version: ptr, offline_mode: i32) -> i32:
   let info = find_package(pkg, offline_mode)
   let dep_version = info_version(info)
   let dep_repo = info_repo(info)
@@ -138,38 +174,102 @@ pub func reg_add_dependency(project_root: ptr, pkg: ptr, requested_version: ptr,
 
   if (str.str_eq(info_found(info), "0")):
     if (str.str_has(pkg, "/")):
-      dep_version = str.concat("", "0.1.0")
+      dep_version = requested_version
+      if (utils.is_empty(dep_version)):
+        dep_version = str.concat("", "main")
+      dep_repo = pkg
       dep_checksum = str.concat("", "")
     else:
       print(str.concat("ERROR: package not found in registry: ", pkg))
       return 0
-
-  tier_warning(info)
+  else:
+    tier_warning(info)
+    if (utils.is_empty(requested_version) == false):
+      dep_version = requested_version
   if (downloader.install_package(pkg, dep_version, dep_repo, dep_checksum, offline_mode) == 0):
-    return 0
-
-  let dep_spec = str.concat("\"", str.concat(dep_version, "\""))
-  if (manifest.add_dependency(project_root, pkg, dep_spec) == 0):
     return 0
   if (lockfile.upsert(project_root, pkg, dep_version, dep_repo, dep_checksum) == 0):
     return 0
   return 1
 
-pub func reg_install_all(project_root: ptr, feature_csv: ptr, all_features: i32, no_default_features: i32, offline_mode: i32) -> i32:
+func install_external_dependency(project_root: ptr, dep_name: ptr, version: ptr, source_kind: ptr, source_value: ptr, offline_mode: i32, accept_yes: i32) -> i32:
+  if (accept_external_sources(accept_yes) == 0):
+    return warn_external_source(dep_name, source_kind, source_value)
+  if (str.str_eq(source_kind, "git")):
+    if (downloader.install_git_package(dep_name, version, source_value, offline_mode) == 0):
+      return 0
+  else:
+    let resolved_path = resolve_path_source(project_root, source_value)
+    if (downloader.install_path_package(dep_name, version, resolved_path) == 0):
+      return 0
+  if (lockfile.upsert(project_root, dep_name, version, external_source_id(source_kind, source_value), str.concat("", "")) == 0):
+    return 0
+  return 1
+
+func install_dependency_line(project_root: ptr, dep_line: ptr, offline_mode: i32, accept_yes: i32) -> i32:
+  let dep_name = manifest.dependency_name(dep_line)
+  let source_kind = manifest.dependency_source_kind(dep_line)
+  let source_value = manifest.dependency_source_value(dep_line)
+  let dep_version = manifest.dependency_version_value(dep_line)
+  if (str.str_eq(source_kind, "registry")):
+    return install_registry_dependency(project_root, dep_name, dep_version, offline_mode)
+  return install_external_dependency(project_root, dep_name, dep_version, source_kind, source_value, offline_mode, accept_yes)
+
+pub func reg_add_dependency(project_root: ptr, pkg: ptr, requested_version: ptr, offline_mode: i32) -> i32:
+  let dep_spec = manifest.registry_dep_spec(requested_version)
+  let install_rc = install_registry_dependency(project_root, pkg, requested_version, offline_mode)
+  if (install_rc == 0):
+    return 0
+  let locked = lockfile.load_lines(project_root)
+  let dep_version = requested_version
+  let i: i64 = 0
+  let n = list.list_count(locked)
+  while (i < n):
+    let line = list.list_get(locked, i)
+    if (str.str_eq(lockfile.pkg_name(line), pkg)):
+      dep_spec = manifest.registry_dep_spec(lockfile.pkg_version(line))
+      i = n
+    else:
+      i = i + 1
+  if (utils.is_empty(dep_version) == false):
+    dep_spec = manifest.registry_dep_spec(dep_version)
+  if (manifest.add_dependency(project_root, pkg, dep_spec) == 0):
+    return 0
+  return 1
+
+pub func reg_add_external_dependency(project_root: ptr, dep_name: ptr, version: ptr, source_kind: ptr, source_value: ptr, offline_mode: i32, accept_yes: i32) -> i32:
+  if (registry_name_conflict(dep_name, offline_mode) != 0):
+    print(str.concat("ERROR: external dependency name conflicts with registry package: ", dep_name))
+    print("Use --alias <name> to choose a different import name.")
+    return 0
+  let resolved_version = version
+  if (utils.is_empty(resolved_version)):
+    if (str.str_eq(source_kind, "git")):
+      resolved_version = str.concat("", "main")
+    else:
+      let resolved_path = resolve_path_source(project_root, source_value)
+      resolved_version = manifest.load_version(resolved_path)
+      if (utils.is_empty(resolved_version)):
+        resolved_version = str.concat("", "0.1.0")
+  if (install_external_dependency(project_root, dep_name, resolved_version, source_kind, source_value, offline_mode, accept_yes) == 0):
+    return 0
+  let dep_spec = manifest.external_dep_spec(source_kind, resolved_version, source_value)
+  if (manifest.add_dependency(project_root, dep_name, dep_spec) == 0):
+    return 0
+  return 1
+
+pub func reg_install_all(project_root: ptr, feature_csv: ptr, all_features: i32, no_default_features: i32, offline_mode: i32, accept_yes: i32) -> i32:
   let dependencies = manifest.load_dependencies_for_features(project_root, feature_csv, all_features, no_default_features)
   let i: i64 = 0
   let n = list.list_count(dependencies)
   while (i < n):
     let dep = list.list_get(dependencies, i)
-    let name = manifest.dependency_name(dep)
-    let spec = manifest.dependency_spec(dep)
-    let clean = utils.strip_quotes(spec)
-    if (reg_add_dependency(project_root, name, clean, offline_mode) == 0):
+    if (install_dependency_line(project_root, dep, offline_mode, accept_yes) == 0):
       return 0
     i = i + 1
   return 1
 
-pub func reg_update_all(project_root: ptr, feature_csv: ptr, all_features: i32, no_default_features: i32, only_dep: ptr, offline_mode: i32) -> i32:
+pub func reg_update_all(project_root: ptr, feature_csv: ptr, all_features: i32, no_default_features: i32, only_dep: ptr, offline_mode: i32, accept_yes: i32) -> i32:
   let dependencies = manifest.load_dependencies_for_features(project_root, feature_csv, all_features, no_default_features)
   if (utils.is_empty(only_dep) == false):
     dependencies = manifest.load_dependencies(project_root)
@@ -184,10 +284,8 @@ pub func reg_update_all(project_root: ptr, feature_csv: ptr, all_features: i32, 
         i = i + 1
         continue
       matched = 1
-    let info = find_package(name, offline_mode)
-    if (str.str_eq(info_found(info), "1")):
-      if (reg_add_dependency(project_root, name, info_version(info), offline_mode) == 0):
-        return 0
+    if (install_dependency_line(project_root, dep, offline_mode, accept_yes) == 0):
+      return 0
     i = i + 1
   if (utils.is_empty(only_dep) == false):
     if (matched == 0):
