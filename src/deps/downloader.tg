@@ -89,7 +89,7 @@ pub func install_git_package(name: ptr, version: ptr, repo: ptr, offline_mode: i
     return 0
   if (str.str_eq(str.from_int(fs.exists(target_dir)), "1")):
     fs.remove_path(target_dir)
-  if (shell.clone_git(repo, version, target_dir) == 0):
+  if (shell.clone_git(repo, version, target_dir) != 0):
     print(str.concat("ERROR: git clone failed for ", repo))
     return 0
   return 1
@@ -103,7 +103,7 @@ pub func install_path_package(name: ptr, version: ptr, src_dir: ptr) -> i32:
   if (str.str_eq(str.from_int(fs.exists(src_dir)), "0")):
     print(str.concat("ERROR: path source not found: ", src_dir))
     return 0
-  if (shell.copy_dir(src_dir, target_dir) == 0):
+  if (shell.copy_dir(src_dir, target_dir) != 0):
     print(str.concat("ERROR: copy failed for ", src_dir))
     return 0
   return 1

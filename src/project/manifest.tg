@@ -657,13 +657,7 @@ pub func dependency_name(dep_line: ptr) -> ptr:
   return str.trim(list.list_get(parts, 0))
 
 pub func dependency_spec(dep_line: ptr) -> ptr:
-  let parts = str.split(dep_line, "=")
-  if (map.map_is_null_ptr(parts) == 1):
-    return str.concat("", "")
-  let two: i64 = 2
-  if (list.list_count(parts) < two):
-    return str.concat("", "")
-  return str.trim(list.list_get(parts, 1))
+  return kv_value(dep_line)
 
 func dependency_entry_line(dep_name: ptr, dep_spec: ptr) -> ptr:
   return str.concat(str.concat(dep_name, " = "), dep_spec)
