@@ -44,6 +44,8 @@ pub func command_from_text(raw: ptr) -> ptr:
     return str.concat("", "why")
   if (str.str_eq(raw, "outdated")):
     return str.concat("", "outdated")
+  if (str.str_eq(raw, "runtime-path")):
+    return str.concat("", "runtime-path")
   return str.concat("", "")
 
 pub func parse() -> ptr:

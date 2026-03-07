@@ -7,6 +7,7 @@ import std.string as str
 import src.core.utils as utils
 import src.core.shell as shell
 import src.deps.cache as cache
+import src.project.manifest as manifest
 
 pub func download_archive(url: ptr, archive_path: ptr) -> i32:
   return shell.download(url, archive_path)
@@ -24,7 +25,24 @@ pub func verify_checksum(archive_path: ptr, checksum: ptr) -> i32:
 pub func extract_archive(archive_path: ptr, out_dir: ptr) -> i32:
   return shell.untar(archive_path, out_dir)
 
+func valid_runtime_asset_dir(asset_dir: ptr) -> i32:
+  let dir = str.trim(asset_dir)
+  if (utils.is_empty(dir)):
+    return 0
+  if (utils.utils_starts_with(dir, "/")):
+    return 0
+  if (utils.utils_starts_with(dir, "\\")):
+    return 0
+  if (str.str_has(dir, ":")):
+    return 0
+  if (str.str_has(dir, "..")):
+    return 0
+  return 1
+
 func sync_runtime_asset_dir(name: ptr, version: ptr, source_dir: ptr, asset_dir: ptr) -> i32:
+  if (valid_runtime_asset_dir(asset_dir) == 0):
+    print(str.concat("WARNING: skipped unsafe runtime asset dir: ", asset_dir))
+    return 1
   let src_asset = path.join(source_dir, asset_dir)
   if (str.str_eq(str.from_int(fs.exists(src_asset)), "0")):
     return 1
@@ -41,12 +59,13 @@ func sync_runtime_assets(name: ptr, version: ptr, source_dir: ptr) -> i32:
   let runtime_root = cache.runtime_package_dir(name, version)
   if (str.str_eq(str.from_int(fs.exists(runtime_root)), "1")):
     fs.remove_path(runtime_root)
-  if (sync_runtime_asset_dir(name, version, source_dir, "bin") == 0):
-    return 0
-  if (sync_runtime_asset_dir(name, version, source_dir, "runtime") == 0):
-    return 0
-  if (sync_runtime_asset_dir(name, version, source_dir, "native") == 0):
-    return 0
+  let runtime_dirs = manifest.package_runtime_dirs(source_dir)
+  let i: i64 = 0
+  let n = list.list_count(runtime_dirs)
+  while (i < n):
+    if (sync_runtime_asset_dir(name, version, source_dir, list.list_get(runtime_dirs, i)) == 0):
+      return 0
+    i = i + 1
   return 1
 
 pub func package_tarball_url(repo: ptr, version: ptr) -> ptr:

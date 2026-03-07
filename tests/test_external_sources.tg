@@ -17,14 +17,18 @@ func expect_true(ok: bool, label: ptr) -> i32:
 func quoted(text: ptr) -> ptr:
   return str.concat("\"", str.concat(text, "\""))
 
-func write_basic_manifest(root: ptr, name: ptr, version: ptr) -> i32:
+func write_basic_manifest(root: ptr, name: ptr, version: ptr, runtime_dirs: ptr) -> i32:
   let raw = str.concat("[package]\n", "")
   raw = str.concat(raw, str.concat("name = \"", str.concat(name, "\"\n")))
   raw = str.concat(raw, str.concat("version = \"", str.concat(version, "\"\n")))
   raw = str.concat(raw, "entry = \"src/main.tg\"\n")
   raw = str.concat(raw, "description = \"\"\n")
   raw = str.concat(raw, "license = \"MIT\"\n")
-  raw = str.concat(raw, "authors = \"\"\n\n")
+  raw = str.concat(raw, "authors = \"\"\n")
+  if (str.str_eq(runtime_dirs, "") == false):
+    raw = str.concat(raw, "\n[package.runtime]\n")
+    raw = str.concat(raw, str.concat("dirs = \"", str.concat(runtime_dirs, "\"\n")))
+  raw = str.concat(raw, "\n")
   raw = str.concat(raw, "[dependencies]\n")
   return fs.write_file(path.join(root, "drago.toml"), raw)
 
@@ -76,22 +80,26 @@ func test_external_sources() -> i32:
   fs.mkdir(path_dep_root)
   fs.mkdir(git_dep_root)
 
-  if (write_basic_manifest(app_root, "app", "0.1.0") == 0):
+  if (write_basic_manifest(app_root, "app", "0.1.0", "") == 0):
     print("FAIL write app manifest")
     return 1
-  if (write_basic_manifest(path_dep_root, "pathdep", "0.3.0") == 0):
+  if (write_basic_manifest(path_dep_root, "pathdep", "0.3.0", "bin, support") == 0):
     print("FAIL write path manifest")
     return 2
-  if (write_basic_manifest(git_dep_root, "gitdep", "0.4.0") == 0):
+  if (write_basic_manifest(git_dep_root, "gitdep", "0.4.0", "runtime, assets, ../escape") == 0):
     print("FAIL write git manifest")
     return 3
 
   fs.write_file(path.join(path_dep_root, "lib.tg"), "func main() -> i32:\n  return 0\n")
   fs.mkdir(path.join(path_dep_root, "bin"))
   fs.write_file(path.join(path_dep_root, "bin/helper.dll"), "path-bin-v1\n")
+  fs.mkdir(path.join(path_dep_root, "support"))
+  fs.write_file(path.join(path_dep_root, "support/helper.dat"), "path-support-v1\n")
   fs.write_file(path.join(git_dep_root, "README.txt"), "v1\n")
   fs.mkdir(path.join(git_dep_root, "runtime"))
   fs.write_file(path.join(git_dep_root, "runtime/config.txt"), "git-runtime-v1\n")
+  fs.mkdir(path.join(git_dep_root, "assets"))
+  fs.write_file(path.join(git_dep_root, "assets/data.bin"), "git-asset-v1\n")
 
   if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " init"))) == 0):
     return 4
@@ -150,30 +158,41 @@ func test_external_sources() -> i32:
   let cached_path_runtime = path.join(path_runtime_root, "bin/helper.dll")
   if (expect_true(str.str_eq(str.trim(fs.read_file(cached_path_runtime)), "path-bin-v1"), "path runtime asset copy") == 0):
     return 23
+  let cached_path_support = path.join(path_runtime_root, "support/helper.dat")
+  if (expect_true(str.str_eq(str.trim(fs.read_file(cached_path_support)), "path-support-v1"), "path custom runtime dir copy") == 0):
+    return 24
 
   let cached_git_file = path.join(git_cache_root, "README.txt")
   if (expect_true(str.str_eq(str.trim(fs.read_file(cached_git_file)), "v1"), "git cache initial clone") == 0):
-    return 24
+    return 25
   let cached_git_runtime = path.join(git_runtime_root, "runtime/config.txt")
   if (expect_true(str.str_eq(str.trim(fs.read_file(cached_git_runtime)), "git-runtime-v1"), "git runtime asset copy") == 0):
-    return 25
+    return 26
+  let cached_git_asset = path.join(git_runtime_root, "assets/data.bin")
+  if (expect_true(str.str_eq(str.trim(fs.read_file(cached_git_asset)), "git-asset-v1"), "git custom runtime dir copy") == 0):
+    return 27
 
   fs.write_file(path.join(git_dep_root, "README.txt"), "v2\n")
   fs.write_file(path.join(git_dep_root, "runtime/config.txt"), "git-runtime-v2\n")
+  fs.write_file(path.join(git_dep_root, "assets/data.bin"), "git-asset-v2\n")
   if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " add README.txt"))) == 0):
-    return 25
+    return 28
   if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " add runtime/config.txt"))) == 0):
-    return 26
+    return 29
+  if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " add assets/data.bin"))) == 0):
+    return 30
   if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " commit -m update"))) == 0):
-    return 27
+    return 31
 
   if (downloader.install_git_package("gitdep", "main", git_dep_root, 0) == 0):
     print("FAIL reinstall git dependency")
-    return 28
+    return 32
   if (expect_true(str.str_eq(str.trim(fs.read_file(cached_git_file)), "v2"), "git cache refresh on install") == 0):
-    return 29
+    return 33
   if (expect_true(str.str_eq(str.trim(fs.read_file(cached_git_runtime)), "git-runtime-v2"), "git runtime asset refresh") == 0):
-    return 30
+    return 34
+  if (expect_true(str.str_eq(str.trim(fs.read_file(cached_git_asset)), "git-asset-v2"), "git custom runtime dir refresh") == 0):
+    return 35
 
   fs.remove_path(tmp)
   return 0

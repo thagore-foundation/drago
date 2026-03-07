@@ -128,6 +128,33 @@ pub func load_dependencies(project_root: ptr) -> ptr:
     i = i + 1
   return out
 
+func default_runtime_dirs() -> ptr:
+  let out = list.list_new()
+  list.list_append(out, "bin")
+  list.list_append(out, "runtime")
+  list.list_append(out, "native")
+  return out
+
+pub func package_runtime_dirs(project_root: ptr) -> ptr:
+  let h = parse_handle(project_root)
+  if (map.map_is_null_ptr(h) == 1):
+    return default_runtime_dirs()
+  let runtime = toml.toml_get_section(h, "package.runtime")
+  if (map.map_is_null_ptr(runtime) == 1):
+    toml.toml_free(h)
+    return default_runtime_dirs()
+  let dirs = toml.toml_get_str(runtime, "dirs")
+  if (map.map_is_null_ptr(dirs) == 1):
+    toml.toml_free(runtime)
+    toml.toml_free(h)
+    return default_runtime_dirs()
+  let parsed = parse_runtime_dirs_value(dirs)
+  toml.toml_free(runtime)
+  toml.toml_free(h)
+  if (list.list_count(parsed) == 0):
+    return default_runtime_dirs()
+  return parsed
+
 func append_all(dst: ptr, src: ptr):
   let i: i64 = 0
   let n = list.list_count(src)
@@ -274,6 +301,22 @@ func parse_array_values(raw_value: ptr) -> ptr:
     let item = strip_quote_pair(list.list_get(parts, i))
     if (utils.is_empty(item) == false):
       list.list_append(out, item)
+    i = i + 1
+  return out
+
+func parse_runtime_dirs_value(raw_value: ptr) -> ptr:
+  let out = list.list_new()
+  let s = str.concat("", raw_value)
+  s = str.replace(s, ";", ",")
+  let parts = str.split(s, ",")
+  if (map.map_is_null_ptr(parts) == 1):
+    return out
+  let i: i64 = 0
+  let n = list.list_count(parts)
+  while (i < n):
+    let item = strip_quote_pair(list.list_get(parts, i))
+    if (utils.is_empty(item) == false):
+      list_append_unique(out, item)
     i = i + 1
   return out
 

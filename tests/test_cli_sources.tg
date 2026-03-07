@@ -36,14 +36,24 @@ func run_drago_in_dir(dir: ptr, drago: ptr, args: ptr) -> i32:
   let full = str.concat("cd ", str.concat(quoted(dir), str.concat(" && ", str.concat(quoted(drago), str.concat(" ", args)))))
   return process.run(full)
 
-func write_basic_manifest(root: ptr, name: ptr, version: ptr) -> i32:
+func capture_drago_in_dir(dir: ptr, drago: ptr, args: ptr) -> ptr:
+  if (str.str_eq(process.env("OS"), "Windows_NT")):
+    return str.concat("", "")
+  let full = str.concat("cd ", str.concat(quoted(dir), str.concat(" && ", str.concat(quoted(drago), str.concat(" ", args)))))
+  return process.capture(full)
+
+func write_basic_manifest(root: ptr, name: ptr, version: ptr, runtime_dirs: ptr) -> i32:
   let raw = str.concat("[package]\n", "")
   raw = str.concat(raw, str.concat("name = \"", str.concat(name, "\"\n")))
   raw = str.concat(raw, str.concat("version = \"", str.concat(version, "\"\n")))
   raw = str.concat(raw, "entry = \"src/main.tg\"\n")
   raw = str.concat(raw, "description = \"\"\n")
   raw = str.concat(raw, "license = \"MIT\"\n")
-  raw = str.concat(raw, "authors = \"\"\n\n")
+  raw = str.concat(raw, "authors = \"\"\n")
+  if (str.str_eq(runtime_dirs, "") == false):
+    raw = str.concat(raw, "\n[package.runtime]\n")
+    raw = str.concat(raw, str.concat("dirs = \"", str.concat(runtime_dirs, "\"\n")))
+  raw = str.concat(raw, "\n")
   raw = str.concat(raw, "[dependencies]\n")
   return fs.write_file(path.join(root, "drago.toml"), raw)
 
@@ -91,18 +101,22 @@ func test_cli_sources() -> i32:
   fs.mkdir(path_dep_root)
   fs.mkdir(git_dep_root)
 
-  if (write_basic_manifest(app_root, "app", "0.1.0") == 0):
+  if (write_basic_manifest(app_root, "app", "0.1.0", "") == 0):
     print("FAIL write app manifest")
     return 1
-  if (write_basic_manifest(path_dep_root, "pathcli", "0.5.0") == 0):
+  if (write_basic_manifest(path_dep_root, "pathcli", "0.5.0", "bin, support") == 0):
     print("FAIL write path manifest")
     return 2
-  if (write_basic_manifest(git_dep_root, "gitcli", "0.6.0") == 0):
+  if (write_basic_manifest(git_dep_root, "gitcli", "0.6.0", "runtime") == 0):
     print("FAIL write git manifest")
     return 3
 
   fs.write_file(path.join(path_dep_root, "lib.tg"), "func main() -> i32:\n  return 0\n")
+  fs.mkdir(path.join(path_dep_root, "support"))
+  fs.write_file(path.join(path_dep_root, "support/helper.dll"), "path-cli-support\n")
   fs.write_file(path.join(git_dep_root, "README.txt"), "git-cli-v1\n")
+  fs.mkdir(path.join(git_dep_root, "runtime"))
+  fs.write_file(path.join(git_dep_root, "runtime/config.txt"), "git-cli-runtime\n")
 
   if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " init"))) == 0):
     return 4
@@ -151,6 +165,15 @@ func test_cli_sources() -> i32:
     return 18
   if (expect_true(str.str_eq(lockfile.pkg_source(git_lock), expected_git_lock_source), "cli git lock source") == 0):
     return 19
+  let home = process.env("HOME")
+  let runtime_root_expected = path.join(path.join(path.join(path.join(home, ".thagore"), "runtimes"), "gitcli"), "main")
+  let runtime_root = capture_drago_in_dir(app_root, drago, "runtime-path gitcli")
+  if (expect_true(str.str_eq(str.trim(runtime_root), runtime_root_expected), "cli runtime root path") == 0):
+    return 20
+  let runtime_dir_expected = path.join(runtime_root_expected, "runtime")
+  let runtime_dir = capture_drago_in_dir(app_root, drago, "runtime-path gitcli runtime")
+  if (expect_true(str.str_eq(str.trim(runtime_dir), runtime_dir_expected), "cli runtime asset path") == 0):
+    return 21
 
   fs.remove_path(tmp)
   return 0

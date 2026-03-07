@@ -46,6 +46,7 @@ func usage():
   print("  tree")
   print("  why <package>")
   print("  outdated")
+  print("  runtime-path <package> [asset-dir]")
 
 func drago_version() -> ptr:
   return str.concat("", "1.0.6")
@@ -853,6 +854,29 @@ func handle_install(root: ptr, quiet: i32, package_name: ptr, features: ptr, all
   out.print_summary_ok("Dependencies installed", quiet)
   return true
 
+func handle_runtime_path(root: ptr, dep_name: ptr, asset_dir: ptr, quiet: i32, package_name: ptr) -> bool:
+  if (utils.is_empty(dep_name)):
+    out.print_error("runtime-path requires package name")
+    return false
+  let target_root = selected_single_member_root(root, quiet, package_name, "runtime-path")
+  if (utils.is_empty(target_root)):
+    return false
+  let locks = lockfile.load_lines(target_root)
+  let i: i64 = 0
+  let n = list.list_count(locks)
+  while (i < n):
+    let line = list.list_get(locks, i)
+    if (str.str_eq(lockfile.pkg_name(line), dep_name)):
+      let dep_version = lockfile.pkg_version(line)
+      if (utils.is_empty(asset_dir)):
+        print(cache.runtime_package_dir(dep_name, dep_version))
+      else:
+        print(cache.runtime_asset_dir(dep_name, dep_version, asset_dir))
+      return true
+    i = i + 1
+  out.print_error(str.concat("dependency not found in drago.lock: ", dep_name))
+  return false
+
 func handle_update(root: ptr, dep_name: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32, offline: i32, yes: i32) -> bool:
   if (is_self_update_target(dep_name) != 0):
     return handle_toolchain_update(dep_name, quiet, offline)
@@ -1084,6 +1108,10 @@ func main() -> i32:
     return 1
   if (str.str_eq(cmd, "outdated")):
     if (handle_outdated(root, quiet, package_name, features, all_features, no_default_features, offline)):
+      return 0
+    return 1
+  if (str.str_eq(cmd, "runtime-path")):
+    if (handle_runtime_path(root, arg1, arg2, quiet, package_name)):
       return 0
     return 1
 

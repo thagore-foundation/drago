@@ -43,6 +43,7 @@ $THAGC build src/main.tg -o drago.bin
 - `drago tree`
 - `drago why <package>`
 - `drago outdated`
+- `drago runtime-path <package> [asset-dir]`
 - Global build flags:
   - `--locked`
   - `--frozen`
@@ -61,6 +62,15 @@ Git dependencies are now written as `{ git = "...", ref = "..." }`; `--ref` is e
 `drago add --path ...` / `drago install --path ...` copy a local source tree into the local cache and record it in `drago.toml`.
 External sources infer the dependency name from the repo/path leaf when possible; use `--alias <name>` to override it.
 If an external package ships `bin/`, `runtime/`, or `native/`, drago mirrors those directories into `~/.thagore/runtimes/<name>/<version>/` so runtime assets have a stable location outside the source cache.
+Packages can override the mirrored directories with:
+
+```toml
+[package.runtime]
+dirs = "bin, runtime, native, support"
+```
+
+Only relative directories inside the package root are accepted; absolute paths and `..` segments are ignored.
+Use `drago runtime-path <package>` to print the runtime root, or `drago runtime-path <package> <asset-dir>` to print one specific mirrored directory.
 External source names are rejected if they conflict with a registry package, to avoid ambiguous imports.
 `drago update <dependency>` updates one dependency (instead of all selected dependencies).
 `drago update drago` (or `drago update toolchain` / `drago update all`) runs `thagup` in default mode and updates both `drago` and `thagc`.

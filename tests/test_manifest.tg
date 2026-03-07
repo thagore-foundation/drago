@@ -23,6 +23,8 @@ func main() -> i32:
   raw = str.concat(raw, "description = \"\"\n")
   raw = str.concat(raw, "license = \"MIT\"\n")
   raw = str.concat(raw, "authors = \"\"\n\n")
+  raw = str.concat(raw, "[package.runtime]\n")
+  raw = str.concat(raw, "dirs = \"bin, support; runtime\"\n\n")
   raw = str.concat(raw, "[dependencies]\n")
   raw = str.concat(raw, str.concat("http = ", str.concat(registry_version, "\n")))
   raw = str.concat(raw, "seed = { version = \"0.2.0\", path = \"vendor/seed\" }\n\n")
@@ -65,16 +67,20 @@ func main() -> i32:
   if (expect_true(str.str_has(saved, "[features]"), "preserve features section") == 0):
     fs.remove_path(tmp)
     return 9
+  let runtime_dirs = manifest.package_runtime_dirs(tmp)
+  if (expect_true(str.str_eq(list.list_get(runtime_dirs, 1), "support"), "parse runtime dirs section") == 0):
+    fs.remove_path(tmp)
+    return 10
   if (manifest.remove_dependency(tmp, "seed") == 0):
     print("manifest remove failed")
     fs.remove_path(tmp)
-    return 10
+    return 11
   let saved_after_remove = fs.read_file(path.join(tmp, "drago.toml"))
   if (expect_true(str.str_has(saved_after_remove, "[features]"), "preserve features after remove") == 0):
     fs.remove_path(tmp)
-    return 11
+    return 12
   if (expect_true(str.str_has(saved_after_remove, expected_ext_line), "preserve ext git dep after remove") == 0):
     fs.remove_path(tmp)
-    return 12
+    return 13
   fs.remove_path(tmp)
   return 0
