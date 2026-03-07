@@ -1,10 +1,9 @@
 import lib.fs as fs
 import lib.map as map
 import lib.path as path
+import src.core.utils as utils
 import std.list as list
 import std.string as str
-import src.core.utils as utils
-
 pub func lock_path(project_root: ptr) -> ptr:
   return path.join(project_root, "drago.lock")
 
@@ -15,36 +14,44 @@ pub func pkg_name(line: ptr) -> ptr:
   let parts = str.split(line, "|")
   if (map.map_is_null_ptr(parts) == 1):
     return str.concat("", "")
+
   let one: i64 = 1
   if (list.list_count(parts) < one):
     return str.concat("", "")
+
   return list.list_get(parts, 0)
 
 pub func pkg_version(line: ptr) -> ptr:
   let parts = str.split(line, "|")
   if (map.map_is_null_ptr(parts) == 1):
     return str.concat("", "")
+
   let two: i64 = 2
   if (list.list_count(parts) < two):
     return str.concat("", "")
+
   return list.list_get(parts, 1)
 
 pub func pkg_source(line: ptr) -> ptr:
   let parts = str.split(line, "|")
   if (map.map_is_null_ptr(parts) == 1):
     return str.concat("", "")
+
   let three: i64 = 3
   if (list.list_count(parts) < three):
     return str.concat("", "")
+
   return list.list_get(parts, 2)
 
 pub func pkg_checksum(line: ptr) -> ptr:
   let parts = str.split(line, "|")
   if (map.map_is_null_ptr(parts) == 1):
     return str.concat("", "")
+
   let four: i64 = 4
   if (list.list_count(parts) < four):
     return str.concat("", "")
+
   return list.list_get(parts, 3)
 
 pub func load_lines(project_root: ptr) -> ptr:
@@ -52,6 +59,7 @@ pub func load_lines(project_root: ptr) -> ptr:
   let out = list.list_new()
   if (fs.exists(p) == 0):
     return out
+
   let raw = fs.read_file(p)
   if (map.map_is_null_ptr(raw) == 1):
     return out
@@ -70,37 +78,45 @@ pub func load_lines(project_root: ptr) -> ptr:
         cur_name = cur_name
       else:
         list.list_append(out, package_line(cur_name, cur_version, cur_source, cur_checksum))
+
       cur_name = str.concat("", "")
       cur_version = str.concat("", "")
       cur_source = str.concat("", "")
       cur_checksum = str.concat("", "")
       i = i + 1
       continue
+
     if (utils.utils_starts_with(line, "name")):
       let kv = str.split(line, "=")
       let two: i64 = 2
       if (list.list_count(kv) >= two):
         cur_name = utils.strip_quotes(str.trim(list.list_get(kv, 1)))
+
     if (utils.utils_starts_with(line, "version")):
       let kv = str.split(line, "=")
       let two: i64 = 2
       if (list.list_count(kv) >= two):
         cur_version = utils.strip_quotes(str.trim(list.list_get(kv, 1)))
+
     if (utils.utils_starts_with(line, "source")):
       let kv = str.split(line, "=")
       let two: i64 = 2
       if (list.list_count(kv) >= two):
         cur_source = utils.strip_quotes(str.trim(list.list_get(kv, 1)))
+
     if (utils.utils_starts_with(line, "checksum")):
       let kv = str.split(line, "=")
       let two: i64 = 2
       if (list.list_count(kv) >= two):
         cur_checksum = utils.strip_quotes(str.trim(list.list_get(kv, 1)))
+
     i = i + 1
+
   if (utils.is_empty(cur_name)):
     cur_name = cur_name
   else:
     list.list_append(out, package_line(cur_name, cur_version, cur_source, cur_checksum))
+
   return out
 
 pub func save_lines(project_root: ptr, lines: ptr) -> i32:
@@ -119,6 +135,7 @@ pub func save_lines(project_root: ptr, lines: ptr) -> i32:
     out = str.concat(out, str.concat("source = \"", str.concat(source, "\"\n")))
     out = str.concat(out, str.concat("checksum = \"", str.concat(checksum, "\"\n\n")))
     i = i + 1
+
   return fs.write_file(lock_path(project_root), out)
 
 pub func upsert(project_root: ptr, name: ptr, version: ptr, source: ptr, checksum: ptr) -> i32:
@@ -134,9 +151,12 @@ pub func upsert(project_root: ptr, name: ptr, version: ptr, source: ptr, checksu
       replaced = 1
     else:
       list.list_append(out, line)
+
     i = i + 1
+
   if (replaced == 0):
     list.list_append(out, package_line(name, version, source, checksum))
+
   return save_lines(project_root, out)
 
 pub func lock_remove(project_root: ptr, name: ptr) -> i32:
@@ -149,6 +169,8 @@ pub func lock_remove(project_root: ptr, name: ptr) -> i32:
     if (str.str_eq(pkg_name(line), name)):
       i = i + 1
       continue
+
     list.list_append(out, line)
     i = i + 1
+
   return save_lines(project_root, out)

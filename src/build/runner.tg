@@ -1,6 +1,5 @@
 import lib.process as process
 import std.string as str
-
 pub func run_binary(binary_path: ptr) -> i32:
   let cmd = str.concat("\"", str.concat(binary_path, "\""))
   return process.run(cmd)

@@ -1,9 +1,8 @@
 import lib.fs as fs
-import std.list as list
-import std.string as str
 import src.deps.cache as cache
 import src.project.lockfile as lockfile
-
+import std.list as list
+import std.string as str
 pub func detect_version_conflicts(project_root: ptr) -> i32:
   let lines = lockfile.load_lines(project_root)
   let i: i64 = 0
@@ -25,8 +24,11 @@ pub func detect_version_conflicts(project_root: ptr) -> i32:
           print(str.concat("ERROR: dependency version conflict for package ", p1_name))
           print(str.concat("  versions: ", str.concat(p1_version, str.concat(" vs ", p2_version))))
           return 0
+
       j = j + 1
+
     i = i + 1
+
   return 1
 
 pub func resolve_sources(project_root: ptr) -> ptr:
@@ -42,8 +44,10 @@ pub func resolve_sources(project_root: ptr) -> ptr:
     if (fs.exists(dir) == 0):
       print(str.concat("ERROR: package not installed in cache: ", str.concat(pkg_name, str.concat("@", pkg_version))))
       return out
+
     list.list_append(out, dir)
     i = i + 1
+
   return out
 
 pub func compile_cache_hit(project_root: ptr, target: ptr, thagc_version: ptr, flags: ptr) -> i32:
@@ -57,5 +61,7 @@ pub func compile_cache_hit(project_root: ptr, target: ptr, thagc_version: ptr, f
     let pkg_checksum = lockfile.pkg_checksum(line)
     if (cache.meta_valid(pkg_name, pkg_version, target, thagc_version, pkg_checksum, flags) == 0):
       return 0
+
     i = i + 1
+
   return 1

@@ -3,17 +3,17 @@ import lib.map as map
 import lib.path as path
 import lib.process as process
 import lib.time as time
+import src.build.linker as linker
+import src.cli.output as out
+import src.core.utils as utils
+import src.project.manifest as manifest
 import std.list as list
 import std.string as str
-import src.core.utils as utils
-import src.cli.output as out
-import src.build.linker as linker
-import src.project.manifest as manifest
-
 pub func is_test_file(name: ptr) -> i32:
   if (utils.utils_contains(name, "test")):
     if (utils.ends_with(name, ".tg")):
       return 1
+
   return 0
 
 pub func discover_tests(project_root: ptr) -> ptr:
@@ -21,16 +21,20 @@ pub func discover_tests(project_root: ptr) -> ptr:
   let tests_dir = path.join(project_root, "tests")
   if (fs.exists(tests_dir) == 0):
     return out
+
   let files = fs.readdir(tests_dir)
   if (map.map_is_null_ptr(files) == 1):
     return out
+
   let i: i64 = 0
   let n = list.list_count(files)
   while (i < n):
     let name = list.list_get(files, i)
     if (is_test_file(name) != 0):
       list.list_append(out, path.join(tests_dir, name))
+
     i = i + 1
+
   return out
 
 pub func run_tests(project_root: ptr, quiet: i32, features: ptr, all_features: i32, no_default_features: i32) -> i32:
@@ -42,10 +46,12 @@ pub func run_tests(project_root: ptr, quiet: i32, features: ptr, all_features: i
     return 1
 
   # Determine link flags for runtime libs once.
+
   let env_link = process.env("DRAGO_TEST_LINK")
   let enable_manifest: i32 = 0
   if (str.str_eq(process.env("DRAGO_TEST_MANIFEST"), "1")):
     enable_manifest = 1
+
   let os_name = process.env("OS")
   let link_arg = str.concat("", env_link)
   if (utils.is_empty(env_link)):
@@ -69,18 +75,22 @@ pub func run_tests(project_root: ptr, quiet: i32, features: ptr, all_features: i
       out.print_warning(str.concat("Skip ", test_file), quiet)
       i = i + 1
       continue
+
     if (utils.utils_contains(test_file, "manifest")):
       if (enable_manifest == 0):
         out.print_warning(str.concat("Skip ", str.concat(test_file, " (DRAGO_TEST_MANIFEST!=1)")), quiet)
         i = i + 1
         continue
+
     let out_bin = path.join(target_dir, str.concat("test_", str.concat(str.from_int(i), ".bin")))
     let cmd_build = str.concat(linker.thagc_bin(), str.concat(" build ", str.concat(test_file, str.concat(" -o ", out_bin))))
     if (utils.is_empty(link_arg) == false):
       cmd_build = str.concat(cmd_build, link_arg)
+
     let feature_args = linker.feature_cli_args(features, all_features, no_default_features)
     if (str.str_eq(feature_args, "") == false):
       cmd_build = str.concat(cmd_build, feature_args)
+
     let start = time.now_ms()
     if (process.run(cmd_build) != 0):
       out.print_error(str.concat(test_file, " (compile failed)"))
@@ -88,6 +98,7 @@ pub func run_tests(project_root: ptr, quiet: i32, features: ptr, all_features: i
       failed = failed + 1
       i = i + 1
       continue
+
     let run_rc = process.run(out_bin)
     let elapsed = time.now_ms() - start
     if (run_rc == 0):
@@ -98,7 +109,9 @@ pub func run_tests(project_root: ptr, quiet: i32, features: ptr, all_features: i
       out.print_error(str.concat(test_file, str.concat(" (exit=", str.concat(str.from_int(run_rc), ")"))))
       print(str.concat("    │ at: ", test_file))
       ok = 0
+
     i = i + 1
+
   print("")
   let total_elapsed = time.now_ms() - started_all
   print(str.concat("  ", str.concat(str.from_int(passed), str.concat(" passed  ", str.concat(str.from_int(failed), str.concat(" failed  ", out.format_ms(total_elapsed)))))))

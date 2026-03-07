@@ -1,51 +1,71 @@
 import lib.process as process
+import src.core.utils as utils
 import std.list as list
 import std.string as str
-import src.core.utils as utils
-
 pub func command_from_text(raw: ptr) -> ptr:
   if (str.str_eq(raw, "--help")):
     return str.concat("", "help")
+
   if (str.str_eq(raw, "help")):
     return str.concat("", "help")
+
   if (str.str_eq(raw, "--version")):
     return str.concat("", "version")
+
   if (str.str_eq(raw, "version")):
     return str.concat("", "version")
+
   if (str.str_eq(raw, "new")):
     return str.concat("", "new")
+
   if (str.str_eq(raw, "build")):
     return str.concat("", "build")
+
   if (str.str_eq(raw, "run")):
     return str.concat("", "run")
+
   if (str.str_eq(raw, "test")):
     return str.concat("", "test")
+
   if (str.str_eq(raw, "add")):
     return str.concat("", "add")
+
   if (str.str_eq(raw, "remove")):
     return str.concat("", "remove")
+
   if (str.str_eq(raw, "install")):
     return str.concat("", "install")
+
   if (str.str_eq(raw, "update")):
     return str.concat("", "update")
+
   if (str.str_eq(raw, "publish")):
     return str.concat("", "publish")
+
   if (str.str_eq(raw, "fmt")):
     return str.concat("", "fmt")
+
   if (str.str_eq(raw, "check")):
     return str.concat("", "check")
+
   if (str.str_eq(raw, "cache")):
     return str.concat("", "cache")
+
   if (str.str_eq(raw, "audit")):
     return str.concat("", "audit")
+
   if (str.str_eq(raw, "tree")):
     return str.concat("", "tree")
+
   if (str.str_eq(raw, "why")):
     return str.concat("", "why")
+
   if (str.str_eq(raw, "outdated")):
     return str.concat("", "outdated")
+
   if (str.str_eq(raw, "runtime-path")):
     return str.concat("", "runtime-path")
+
   return str.concat("", "")
 
 pub func parse() -> ptr:
@@ -75,166 +95,212 @@ pub func parse() -> ptr:
       quiet = 1
       i = i + 1
       continue
+
     if (str.str_eq(a, "--verbose")):
       verbose = 1
       i = i + 1
       continue
+
     if (str.str_eq(a, "--locked")):
       locked = 1
       i = i + 1
       continue
+
     if (str.str_eq(a, "--frozen")):
       frozen = 1
       i = i + 1
       continue
+
     if (str.str_eq(a, "--offline")):
       offline = 1
       i = i + 1
       continue
+
     if (str.str_eq(a, "--yes")):
       yes = 1
       i = i + 1
       continue
+
     if (str.str_eq(a, "--git")):
       source_kind = str.concat("", "git")
-      if ((i + 1) < argc):
+      if (i + 1 < argc):
         source_value = process.argv(i + 1)
         i = i + 2
         continue
+
       i = i + 1
       continue
+
     if (str.str_starts(a, "--git=")):
       let parts = str.split(a, "=")
       if (list.list_count(parts) >= 2):
         source_kind = str.concat("", "git")
         source_value = list.list_get(parts, 1)
+
       i = i + 1
       continue
+
     if (str.str_eq(a, "--path")):
       source_kind = str.concat("", "path")
-      if ((i + 1) < argc):
+      if (i + 1 < argc):
         source_value = process.argv(i + 1)
         i = i + 2
         continue
+
       i = i + 1
       continue
+
     if (str.str_starts(a, "--path=")):
       let parts = str.split(a, "=")
       if (list.list_count(parts) >= 2):
         source_kind = str.concat("", "path")
         source_value = list.list_get(parts, 1)
+
       i = i + 1
       continue
+
     if (str.str_eq(a, "--alias")):
-      if ((i + 1) < argc):
+      if (i + 1 < argc):
         alias = process.argv(i + 1)
         i = i + 2
         continue
+
       i = i + 1
       continue
+
     if (str.str_starts(a, "--alias=")):
       let parts = str.split(a, "=")
       if (list.list_count(parts) >= 2):
         alias = list.list_get(parts, 1)
+
       i = i + 1
       continue
+
     if (str.str_eq(a, "--ref")):
-      if ((i + 1) < argc):
+      if (i + 1 < argc):
         arg2 = process.argv(i + 1)
         i = i + 2
         continue
+
       i = i + 1
       continue
+
     if (str.str_starts(a, "--ref=")):
       let parts = str.split(a, "=")
       if (list.list_count(parts) >= 2):
         arg2 = list.list_get(parts, 1)
+
       i = i + 1
       continue
+
     if (str.str_eq(a, "-p")):
-      if ((i + 1) < argc):
+      if (i + 1 < argc):
         package_name = process.argv(i + 1)
         i = i + 2
         continue
+
       i = i + 1
       continue
+
     if (str.str_eq(a, "--package")):
-      if ((i + 1) < argc):
+      if (i + 1 < argc):
         package_name = process.argv(i + 1)
         i = i + 2
         continue
+
       i = i + 1
       continue
+
     if (str.str_starts(a, "--package=")):
       let parts = str.split(a, "=")
       if (list.list_count(parts) >= 2):
         package_name = list.list_get(parts, 1)
+
       i = i + 1
       continue
+
     if (str.str_eq(a, "--all-features")):
       all_features = 1
       i = i + 1
       continue
+
     if (str.str_eq(a, "--no-default-features")):
       no_default_features = 1
       i = i + 1
       continue
+
     if (str.str_eq(a, "--features")):
-      if ((i + 1) < argc):
+      if (i + 1 < argc):
         features = process.argv(i + 1)
         i = i + 2
         continue
+
       i = i + 1
       continue
+
     if (str.str_starts(a, "--features=")):
       let parts = str.split(a, "=")
       if (list.list_count(parts) >= 2):
         features = list.list_get(parts, 1)
+
       i = i + 1
       continue
+
     if (seen_cmd == 0):
       let k = command_from_text(a)
       if (utils.is_empty(k)):
         kind = str.concat("", "help")
       else:
         kind = k
+
       seen_cmd = 1
       i = i + 1
       continue
+
     if (utils.is_empty(arg1)):
       arg1 = a
       i = i + 1
       continue
+
     if (utils.is_empty(arg2)):
       arg2 = a
       i = i + 1
       continue
+
     i = i + 1
 
   let q = str.concat("", "0")
   if (quiet != 0):
     q = str.concat("", "1")
+
   let v = str.concat("", "0")
   if (verbose != 0):
     v = str.concat("", "1")
+
   let af = str.concat("", "0")
   if (all_features != 0):
     af = str.concat("", "1")
+
   let ndf = str.concat("", "0")
   if (no_default_features != 0):
     ndf = str.concat("", "1")
+
   let lk = str.concat("", "0")
   if (locked != 0):
     lk = str.concat("", "1")
+
   let fr = str.concat("", "0")
   if (frozen != 0):
     fr = str.concat("", "1")
+
   let of = str.concat("", "0")
   if (offline != 0):
     of = str.concat("", "1")
+
   let ys = str.concat("", "0")
   if (yes != 0):
     ys = str.concat("", "1")
+
   let out = kind
   out = str.concat(out, str.concat("|", arg1))
   out = str.concat(out, str.concat("|", arg2))
@@ -257,6 +323,7 @@ pub func part(parsed: ptr, idx: i64) -> ptr:
   let parts = str.split(parsed, "|")
   if (list.list_count(parts) <= idx):
     return str.concat("", "")
+
   return list.list_get(parts, idx)
 
 pub func parsed_kind(parsed: ptr) -> ptr:
@@ -271,11 +338,13 @@ pub func parsed_arg2(parsed: ptr) -> ptr:
 pub func parsed_quiet(parsed: ptr) -> i32:
   if (str.str_eq(part(parsed, 3), "1")):
     return 1
+
   return 0
 
 pub func parsed_verbose(parsed: ptr) -> i32:
   if (str.str_eq(part(parsed, 4), "1")):
     return 1
+
   return 0
 
 pub func parsed_features(parsed: ptr) -> ptr:
@@ -284,6 +353,7 @@ pub func parsed_features(parsed: ptr) -> ptr:
 pub func parsed_all_features(parsed: ptr) -> i32:
   if (str.str_eq(part(parsed, 7), "1")):
     return 1
+
   return 0
 
 pub func parsed_package(parsed: ptr) -> ptr:
@@ -292,21 +362,25 @@ pub func parsed_package(parsed: ptr) -> ptr:
 pub func parsed_no_default_features(parsed: ptr) -> i32:
   if (str.str_eq(part(parsed, 8), "1")):
     return 1
+
   return 0
 
 pub func parsed_locked(parsed: ptr) -> i32:
   if (str.str_eq(part(parsed, 9), "1")):
     return 1
+
   return 0
 
 pub func parsed_frozen(parsed: ptr) -> i32:
   if (str.str_eq(part(parsed, 10), "1")):
     return 1
+
   return 0
 
 pub func parsed_offline(parsed: ptr) -> i32:
   if (str.str_eq(part(parsed, 11), "1")):
     return 1
+
   return 0
 
 pub func parsed_source_kind(parsed: ptr) -> ptr:
@@ -321,4 +395,5 @@ pub func parsed_alias(parsed: ptr) -> ptr:
 pub func parsed_yes(parsed: ptr) -> i32:
   if (str.str_eq(part(parsed, 15), "1")):
     return 1
+
   return 0

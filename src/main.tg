@@ -3,11 +3,10 @@ import lib.map as map
 import lib.path as path
 import lib.process as process
 import lib.time as time
-import std.list as list
-import std.string as str
 import src.build.compiler as compiler
 import src.build.linker as linker
 import src.build.runner as runner
+import src.cli.fmt as fmt
 import src.cli.output as out
 import src.cli.parser as parser
 import src.core.utils as utils
@@ -18,7 +17,8 @@ import src.project.lockfile as lockfile
 import src.project.manifest as manifest
 import src.project.scaffold as scaffold
 import src.test.runner as test_runner
-
+import std.list as list
+import std.string as str
 func usage():
   print("drago <command> [args] [--quiet] [--verbose] [--locked|--frozen] [--offline] [-p|--package <name>] [--features <f1,f2>] [--all-features] [--no-default-features]")
   print("commands:")
@@ -64,6 +64,7 @@ func safe_list_count(items: ptr) -> i64:
   let zero: i64 = 0
   if (map.map_is_null_ptr(items) == 1):
     return zero
+
   return list.list_count(items)
 
 func workspace_member_roots(root: ptr, quiet: i32) -> ptr:
@@ -80,39 +81,49 @@ func workspace_member_roots(root: ptr, quiet: i32) -> ptr:
     if (utils.is_empty(member)):
       i = i + 1
       continue
+
     let member_root = member
     if (utils.utils_starts_with(member, "/") == false):
       member_root = path.join(root, member)
+
     let member_manifest = path.join(member_root, "drago.toml")
     if (fs.exists(member_manifest) != 0):
       list.list_append(roots, member_root)
     else:
       out.print_warning(str.concat("Workspace member skipped (missing drago.toml): ", member), quiet)
+
     i = i + 1
 
   if (list.list_count(roots) == 0):
     list.list_append(roots, root)
+
   return roots
 
 func member_matches_selector(member_root: ptr, selector: ptr) -> bool:
   let wanted = str.trim(selector)
   if (utils.is_empty(wanted)):
     return true
+
   let name = manifest.load_name(member_root)
   if (str.str_eq(name, wanted)):
     return true
+
   if (str.str_eq(member_root, wanted)):
     return true
+
   if (utils.ends_with(member_root, str.concat("/", wanted))):
     return true
+
   if (utils.ends_with(member_root, str.concat("\\", wanted))):
     return true
+
   return false
 
 func selected_member_roots(root: ptr, quiet: i32, package_name: ptr) -> ptr:
   let all_members = workspace_member_roots(root, quiet)
   if (utils.is_empty(package_name)):
     return all_members
+
   let filtered = list.list_new()
   let i: i64 = 0
   let n = list.list_count(all_members)
@@ -120,9 +131,12 @@ func selected_member_roots(root: ptr, quiet: i32, package_name: ptr) -> ptr:
     let member_root = list.list_get(all_members, i)
     if (member_matches_selector(member_root, package_name)):
       list.list_append(filtered, member_root)
+
     i = i + 1
+
   if (list.list_count(filtered) != 0):
     return filtered
+
   out.print_error(str.concat("package not found in workspace: ", package_name))
   return filtered
 
@@ -131,9 +145,11 @@ func selected_single_member_root(root: ptr, quiet: i32, package_name: ptr, actio
   let n = list.list_count(members)
   if (n == 0):
     return str.concat("", "")
+
   if (n > 1):
     out.print_error(str.concat(action, " matches multiple packages; choose one with --package"))
     return str.concat("", "")
+
   return list.list_get(members, 0)
 
 func lock_line_exists(lines: ptr, line: ptr) -> i32:
@@ -142,12 +158,15 @@ func lock_line_exists(lines: ptr, line: ptr) -> i32:
   while (i < n):
     if (str.str_eq(list.list_get(lines, i), line)):
       return 1
+
     i = i + 1
+
   return 0
 
 func append_lock_line_unique(lines: ptr, line: ptr):
   if (lock_line_exists(lines, line) == 0):
     list.list_append(lines, line)
+
   return 0
 
 func workspace_merged_lock_lines(root: ptr, quiet: i32) -> ptr:
@@ -163,17 +182,21 @@ func workspace_merged_lock_lines(root: ptr, quiet: i32) -> ptr:
     while (j < m):
       append_lock_line_unique(merged, list.list_get(lines, j))
       j = j + 1
+
     i = i + 1
+
   return merged
 
 func sync_workspace_lock(root: ptr, quiet: i32) -> i32:
   let declared = manifest.load_workspace_members(root)
   if (list.list_count(declared) == 0):
     return 1
+
   let merged = workspace_merged_lock_lines(root, quiet)
   if (lockfile.save_lines(root, merged) == 0):
     out.print_error("failed to write workspace drago.lock")
     return 0
+
   out.print_done("Updated", "drago.lock (workspace)", quiet)
   return 1
 
@@ -184,12 +207,16 @@ func is_self_update_target(name: ptr) -> i32:
   let t = str.trim(name)
   if (str.str_eq(t, "drago")):
     return 1
+
   if (str.str_eq(t, "thagc")):
     return 1
+
   if (str.str_eq(t, "toolchain")):
     return 1
+
   if (str.str_eq(t, "all")):
     return 1
+
   return 0
 
 func lock_version(lines: ptr, dep_name: ptr) -> ptr:
@@ -199,27 +226,37 @@ func lock_version(lines: ptr, dep_name: ptr) -> ptr:
     let line = list.list_get(lines, i)
     if (str.str_eq(lockfile.pkg_name(line), dep_name)):
       return lockfile.pkg_version(line)
+
     i = i + 1
+
   return str.concat("", "")
 
 func command_requires_lock_consistency(cmd: ptr, arg1: ptr) -> i32:
   if (str.str_eq(cmd, "build")):
     return 1
+
   if (str.str_eq(cmd, "run")):
     return 1
+
   if (str.str_eq(cmd, "test")):
     return 1
+
   if (str.str_eq(cmd, "check")):
     return 1
+
   if (str.str_eq(cmd, "tree")):
     return 1
+
   if (str.str_eq(cmd, "why")):
     return 1
+
   if (str.str_eq(cmd, "outdated")):
     return 1
+
   if (str.str_eq(cmd, "update")):
     if (is_self_update_target(arg1) != 0):
       return 0
+
   return 0
 
 func lock_consistent_for_member(member_root: ptr, features: ptr, all_features: i32, no_default_features: i32, quiet: i32) -> i32:
@@ -238,10 +275,13 @@ func lock_consistent_for_member(member_root: ptr, features: ptr, all_features: i
       ok = 0
       i = i + 1
       continue
+
     if (str.str_eq(dep_ver, locked_ver) == false):
       out.print_warning(str.concat(project_name(member_root), str.concat(": lock mismatch for ", str.concat(dep_name, str.concat(" (manifest ", str.concat(dep_ver, str.concat(", lock ", str.concat(locked_ver, ")"))))))), quiet)
       ok = 0
+
     i = i + 1
+
   i = 0
   n = list.list_count(lock_lines)
   while (i < n):
@@ -250,6 +290,7 @@ func lock_consistent_for_member(member_root: ptr, features: ptr, all_features: i
     if (utils.is_empty(lock_name)):
       i = i + 1
       continue
+
     let found = 0
     let j: i64 = 0
     let m = list.list_count(deps)
@@ -260,10 +301,13 @@ func lock_consistent_for_member(member_root: ptr, features: ptr, all_features: i
         j = m
       else:
         j = j + 1
+
     if (found == 0):
       out.print_warning(str.concat(project_name(member_root), str.concat(": unexpected lock entry -> ", lock_name)), quiet)
       ok = 0
+
     i = i + 1
+
   return ok
 
 func verify_locked_dependencies(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32) -> i32:
@@ -279,7 +323,9 @@ func verify_locked_dependencies(root: ptr, quiet: i32, package_name: ptr, featur
       if (lock_line_exists(actual, line) == 0):
         out.print_warning(str.concat("workspace lock missing entry: ", lockfile.pkg_name(line)), quiet)
         ok = 0
+
       i = i + 1
+
     i = 0
     n = list.list_count(actual)
     while (i < n):
@@ -287,18 +333,24 @@ func verify_locked_dependencies(root: ptr, quiet: i32, package_name: ptr, featur
       if (lock_line_exists(expected, line) == 0):
         out.print_warning(str.concat("workspace lock has unexpected entry: ", lockfile.pkg_name(line)), quiet)
         ok = 0
+
       i = i + 1
+
     return ok
+
   let members = selected_member_roots(root, quiet, package_name)
   if (list.list_count(members) == 0):
     return 0
+
   let ok = 1
   let i: i64 = 0
   let n = list.list_count(members)
   while (i < n):
     if (lock_consistent_for_member(list.list_get(members, i), features, all_features, no_default_features, quiet) == 0):
       ok = 0
+
     i = i + 1
+
   return ok
 
 func path_contains_node(path_text: ptr, name: ptr) -> i32:
@@ -308,7 +360,9 @@ func path_contains_node(path_text: ptr, name: ptr) -> i32:
   while (i < n):
     if (str.str_eq(str.trim(list.list_get(nodes, i)), name)):
       return 1
+
     i = i + 1
+
   return 0
 
 func stack_entry(path_text: ptr, dep_name: ptr, dep_version: ptr, depth: i64) -> ptr:
@@ -324,24 +378,28 @@ func stack_path_text(entry: ptr) -> ptr:
   let parts = str.split(entry, "|")
   if (list.list_count(parts) >= 1):
     return list.list_get(parts, 0)
+
   return str.concat("", "")
 
 func stack_dep_name(entry: ptr) -> ptr:
   let parts = str.split(entry, "|")
   if (list.list_count(parts) >= 2):
     return list.list_get(parts, 1)
+
   return str.concat("", "")
 
 func stack_dep_version(entry: ptr) -> ptr:
   let parts = str.split(entry, "|")
   if (list.list_count(parts) >= 3):
     return list.list_get(parts, 2)
+
   return str.concat("", "")
 
 func stack_depth(entry: ptr) -> i64:
   let parts = str.split(entry, "|")
   if (list.list_count(parts) >= 4):
     return str.to_int(list.list_get(parts, 3))
+
   let zero: i64 = 0
   return zero
 
@@ -349,11 +407,14 @@ func cached_dependency_lines(dep_name: ptr, dep_version: ptr) -> ptr:
   let out = list.list_new()
   if (utils.is_empty(dep_name)):
     return out
+
   if (utils.is_empty(dep_version)):
     return out
+
   let dep_root = cache.package_dir(dep_name, dep_version)
   if (fs.exists(path.join(dep_root, "drago.toml")) == 0):
     return out
+
   return manifest.load_dependencies(dep_root)
 
 func find_transitive_chain(start_dep_name: ptr, start_dep_version: ptr, target_pkg: ptr) -> ptr:
@@ -370,8 +431,10 @@ func find_transitive_chain(start_dep_name: ptr, start_dep_version: ptr, target_p
     let cur_depth = stack_depth(cur_entry)
     if (str.str_eq(cur_name, target_pkg)):
       return cur_path
+
     if (cur_depth >= max_depth):
       continue
+
     let children = cached_dependency_lines(cur_name, cur_version)
     let i: i64 = 0
     let n = list.list_count(children)
@@ -382,12 +445,15 @@ func find_transitive_chain(start_dep_name: ptr, start_dep_version: ptr, target_p
       if (utils.is_empty(child_name)):
         i = i + 1
         continue
+
       if (path_contains_node(cur_path, child_name) != 0):
         i = i + 1
         continue
+
       let next_path = str.concat(cur_path, str.concat(" > ", child_name))
       list.list_append(stack, stack_entry(next_path, child_name, child_version, cur_depth + 1))
       i = i + 1
+
   return str.concat("", "")
 
 func print_dependency_tree_for_member(member_root: ptr, features: ptr, all_features: i32, no_default_features: i32):
@@ -399,6 +465,7 @@ func print_dependency_tree_for_member(member_root: ptr, features: ptr, all_featu
   if (n == 0):
     print("  (no dependencies)")
     return 0
+
   let i: i64 = 0
   while (i < n):
     let dep = list.list_get(deps, i)
@@ -410,7 +477,9 @@ func print_dependency_tree_for_member(member_root: ptr, features: ptr, all_featu
     else:
       let detail = str.concat(" @", str.concat(wanted, str.concat(" (locked ", str.concat(locked, ")"))))
       print(str.concat("  - ", str.concat(dep_name, detail)))
+
     i = i + 1
+
   return 0
 
 func handle_tree(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32) -> bool:
@@ -418,23 +487,28 @@ func handle_tree(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_fe
   let n = list.list_count(members)
   if (n == 0):
     return false
+
   out.print_action("🌳", "Dependency tree", quiet)
   let i: i64 = 0
   while (i < n):
     if (i != 0):
       print("")
+
     print_dependency_tree_for_member(list.list_get(members, i), features, all_features, no_default_features)
     i = i + 1
+
   return true
 
 func handle_why(root: ptr, pkg: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32) -> bool:
   if (utils.is_empty(pkg)):
     out.print_error("why requires package name")
     return false
+
   let members = selected_member_roots(root, quiet, package_name)
   let n = list.list_count(members)
   if (n == 0):
     return false
+
   out.print_action("🔍", str.concat("Why ", pkg), quiet)
   let found = 0
   let i: i64 = 0
@@ -452,68 +526,90 @@ func handle_why(root: ptr, pkg: ptr, quiet: i32, package_name: ptr, features: pt
         print(str.concat("  - ", str.concat(project_name(member_root), str.concat(" depends on ", str.concat(pkg, str.concat(" @", dep_version_text(dep)))))))
         j = j + 1
         continue
+
       let dep_ver = lock_version(locks, dep_name)
       if (utils.is_empty(dep_ver)):
         dep_ver = dep_version_text(dep)
+
       let chain = find_transitive_chain(dep_name, dep_ver, pkg)
       if (utils.is_empty(chain) == false):
         found = 1
         print(str.concat("  - ", str.concat(project_name(member_root), str.concat(" depends on ", chain))))
+
       j = j + 1
+
     i = i + 1
+
   if (found != 0):
     return true
+
   out.print_warning(str.concat("No dependency chain found for ", pkg), quiet)
   return false
 
 func command_mutates_lock(cmd: ptr, arg1: ptr) -> i32:
   if (str.str_eq(cmd, "add")):
     return 1
+
   if (str.str_eq(cmd, "remove")):
     return 1
+
   if (str.str_eq(cmd, "install")):
     return 1
+
   if (str.str_eq(cmd, "update")):
     if (is_self_update_target(arg1) != 0):
       return 0
+
     return 1
+
   return 0
 
 func command_may_use_network(cmd: ptr, arg1: ptr) -> i32:
   if (str.str_eq(cmd, "add")):
     return 1
+
   if (str.str_eq(cmd, "install")):
     return 1
+
   if (str.str_eq(cmd, "update")):
     return 1
+
   if (str.str_eq(cmd, "outdated")):
     return 1
+
   if (str.str_eq(cmd, "publish")):
     return 1
+
   if (str.str_eq(cmd, "audit")):
     return 1
+
   return 0
 
 func enforce_mode_guards(cmd: ptr, arg1: ptr, locked: i32, frozen: i32, offline: i32) -> bool:
   let effective_locked = locked
   if (frozen != 0):
     effective_locked = 1
+
   if (effective_locked != 0):
     if (command_mutates_lock(cmd, arg1) != 0):
       out.print_error("--locked/--frozen disallow commands that modify drago.lock")
       return false
+
   if (frozen != 0):
     if (command_may_use_network(cmd, arg1) != 0):
       let effective_offline = offline
       if (str.str_eq(process.env("DRAGO_OFFLINE"), "1")):
         effective_offline = 1
+
       if (effective_offline == 0):
         out.print_error("--frozen requires --offline (or DRAGO_OFFLINE=1) for networked commands")
         return false
+
   if (offline != 0):
     if (str.str_eq(cmd, "publish")):
       out.print_error("--offline disallows publish")
       return false
+
   return true
 
 func sh_quote(value: ptr) -> ptr:
@@ -536,16 +632,22 @@ func thagup_posix_args_for_target(target: ptr) -> ptr:
   let dry_run = process.env("DRAGO_UPDATE_DRY_RUN")
   if (str.str_eq(thagc_tag, "") == false):
     args = str.concat(args, str.concat(" --tag ", sh_quote(thagc_tag)))
+
   if (str.str_eq(drago_tag, "") == false):
     args = str.concat(args, str.concat(" --drago-tag ", sh_quote(drago_tag)))
+
   if (str.str_eq(channel, "") == false):
     args = str.concat(args, str.concat(" --channel ", sh_quote(channel)))
+
   if (str.str_eq(arch, "") == false):
     args = str.concat(args, str.concat(" --arch ", sh_quote(arch)))
+
   if (str.str_eq(dry_run, "1")):
     args = str.concat(args, " --dry-run")
+
   if (str.str_eq(target, "thagc")):
     args = str.concat(args, " --without-drago")
+
   return args
 
 func thagup_windows_args_for_target(target: ptr) -> ptr:
@@ -557,27 +659,36 @@ func thagup_windows_args_for_target(target: ptr) -> ptr:
   let dry_run = process.env("DRAGO_UPDATE_DRY_RUN")
   if (str.str_eq(thagc_tag, "") == false):
     args = str.concat(args, str.concat(" -Tag ", ps_quote(thagc_tag)))
+
   if (str.str_eq(drago_tag, "") == false):
     args = str.concat(args, str.concat(" -DragoTag ", ps_quote(drago_tag)))
+
   if (str.str_eq(channel, "") == false):
     args = str.concat(args, str.concat(" -Channel ", ps_quote(channel)))
+
   if (str.str_eq(arch, "") == false):
     args = str.concat(args, str.concat(" -Arch ", ps_quote(arch)))
+
   if (str.str_eq(dry_run, "1")):
     args = str.concat(args, " -DryRun")
+
   if (str.str_eq(target, "thagc")):
     args = str.concat(args, " -WithoutDrago")
+
   return args
 
 func handle_toolchain_update(target: ptr, quiet: i32, offline: i32) -> bool:
   if (offline != 0):
     out.print_error("--offline cannot be used with toolchain self-update")
     return false
+
   let target_text = target
   if (str.str_eq(target, "all")):
     target_text = str.concat("", "drago")
+
   if (str.str_eq(target, "toolchain")):
     target_text = str.concat("", "drago")
+
   out.print_action("🛠", str.concat("Updating ", target), quiet)
   let os_name = process.env("OS")
   let cmd = str.concat("", "")
@@ -591,10 +702,12 @@ func handle_toolchain_update(target: ptr, quiet: i32, offline: i32) -> bool:
     cmd = str.concat("tmp=\"$(mktemp)\" || exit 1; curl -fsSL \"", str.concat(url, "\" -o \"$tmp\" || { rm -f \"$tmp\"; exit 1; }; bash \"$tmp\""))
     cmd = str.concat(cmd, thagup_posix_args_for_target(target_text))
     cmd = str.concat(cmd, "; rc=$?; rm -f \"$tmp\"; exit $rc")
+
   let rc = process.run(cmd)
   if (rc != 0):
     out.print_summary_fail("Self-update failed")
     return false
+
   out.print_summary_ok("Toolchain updated via thagup", quiet)
   return true
 
@@ -603,6 +716,7 @@ func handle_outdated(root: ptr, quiet: i32, package_name: ptr, features: ptr, al
   let n = list.list_count(members)
   if (n == 0):
     return false
+
   out.print_action("⬆", "Checking outdated dependencies", quiet)
   let outdated_count: i64 = 0
   let i: i64 = 0
@@ -618,6 +732,7 @@ func handle_outdated(root: ptr, quiet: i32, package_name: ptr, features: ptr, al
       if (utils.is_empty(current)):
         j = j + 1
         continue
+
       let info = registry.find_package(dep_name, offline)
       if (str.str_eq(registry.info_found(info), "1")):
         let latest = registry.info_version(info)
@@ -625,11 +740,15 @@ func handle_outdated(root: ptr, quiet: i32, package_name: ptr, features: ptr, al
           if (str.str_eq(current, latest) == false):
             outdated_count = outdated_count + 1
             print(str.concat("  - ", str.concat(project_name(member_root), str.concat(": ", str.concat(dep_name, str.concat(" ", str.concat(current, str.concat(" -> ", latest))))))))
+
       j = j + 1
+
     i = i + 1
+
   if (outdated_count == 0):
     out.print_summary_ok("All dependencies are up to date", quiet)
     return true
+
   out.print_warning(str.concat(str.from_int(outdated_count), " outdated dependency entries found"), quiet)
   return false
 
@@ -638,6 +757,7 @@ func handle_cache(sub: ptr, quiet: i32) -> bool:
   if (init_rc == 0):
     out.print_error("cannot initialize cache layout")
     return false
+
   if (utils.is_empty(sub)):
     out.print_action("📁", "Drago Cache", quiet)
     let source_items = cache.list_packages()
@@ -656,6 +776,7 @@ func handle_cache(sub: ptr, quiet: i32) -> bool:
     print("  drago cache clean     remove compiled cache")
     print("  drago cache purge     remove everything")
     return true
+
   if (str.str_eq(sub, "list")):
     let pkgs = cache.list_packages()
     let i: i64 = 0
@@ -663,16 +784,22 @@ func handle_cache(sub: ptr, quiet: i32) -> bool:
     while (i < n):
       print(list.list_get(pkgs, i))
       i = i + 1
+
     return true
+
   if (str.str_eq(sub, "size")):
     print(str.concat("cache size bytes: ", str.from_int(cache.cache_size_bytes())))
     return true
+
   if (str.str_eq(sub, "clean")):
     return cache.clean_compiled() != 0
+
   if (str.str_eq(sub, "purge")):
     return cache.purge_all() != 0
+
   if (str.str_eq(sub, "purge-unused")):
     return cache.purge_unused() != 0
+
   out.print_error("cache subcommand required: list|size|clean|purge|purge-unused")
   return false
 
@@ -686,9 +813,11 @@ func handle_build_single(root: ptr, quiet: i32, features: ptr, all_features: i32
   if (conflict_rc == 0):
     out.print_summary_fail("Build failed")
     return false
+
   let build_rc = compiler.build_project(root, quiet, features, all_features, no_default_features)
   if (build_rc == 0):
     return false
+
   let elapsed = time.now_ms() - started
   let bin = linker.output_binary_path(root, name)
   let size = fs.filesize(bin)
@@ -707,13 +836,17 @@ func handle_build(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_f
   let n = list.list_count(members)
   if (n == 0):
     return false
+
   if (n > 1):
     out.print_action("🧩", str.concat("Building workspace (", str.concat(str.from_int(n), " members)")), quiet)
+
   let i: i64 = 0
   while (i < n):
     if (handle_build_single(list.list_get(members, i), quiet, features, all_features, no_default_features) == false):
       return false
+
     i = i + 1
+
   return true
 
 func handle_run(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32) -> bool:
@@ -721,14 +854,17 @@ func handle_run(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_fea
   let n = list.list_count(members)
   if (n == 0):
     return false
+
   if (n > 1):
     out.print_error("run matches multiple packages; choose one with --package")
     return false
+
   if (utils.is_empty(package_name) == false):
     let run_root = list.list_get(members, 0)
     let build_ok = handle_build_single(run_root, quiet, features, all_features, no_default_features)
     if (build_ok == false):
       return false
+
     print("")
     out.print_action("🚀", str.concat("Running ", project_name(run_root)), quiet)
     out.print_separator(quiet)
@@ -736,14 +872,18 @@ func handle_run(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_fea
     let rc = runner.run_binary(bin)
     if (rc == 0):
       return true
+
     return false
+
   if (list.list_count(members) > 1):
     out.print_error("run in workspace root is ambiguous; run inside a member package")
     return false
+
   let run_root = list.list_get(members, 0)
   let build_ok = handle_build_single(run_root, quiet, features, all_features, no_default_features)
   if (build_ok == false):
     return false
+
   print("")
   out.print_action("🚀", str.concat("Running ", project_name(run_root)), quiet)
   out.print_separator(quiet)
@@ -751,44 +891,54 @@ func handle_run(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_fea
   let rc = runner.run_binary(bin)
   if (rc == 0):
     return true
+
   return false
 
 func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32, package_name: ptr, offline: i32, source_kind: ptr, source_value: ptr, source_alias: ptr, yes: i32) -> bool:
   let target_root = selected_single_member_root(root, quiet, package_name, "add")
   if (utils.is_empty(target_root)):
     return false
+
   let wanted = version
   let started = time.now_ms()
   if (utils.is_empty(source_kind) == false):
     if (utils.is_empty(source_value)):
       out.print_error("external source flag requires a value")
       return false
+
     let dep_name = source_alias
     if (utils.is_empty(dep_name)):
       dep_name = utils.source_leaf_name(source_value)
+
     if (utils.is_empty(dep_name)):
       out.print_error("external source requires --alias <name> when name cannot be inferred")
       return false
+
     let title = str.concat(dep_name, str.concat(" <= ", source_value))
     out.print_action("📦", str.concat("Adding ", title), quiet)
     let add_external_rc = registry.reg_add_external_dependency(target_root, dep_name, wanted, source_kind, source_value, offline, yes)
     if (add_external_rc == 0):
       out.print_summary_fail("Add failed")
       return false
+
     if (sync_workspace_lock(root, quiet) == 0):
       return false
+
     let elapsed_external = time.now_ms() - started
     out.print_done("Updated", "drago.toml", quiet)
     out.print_done("Updated", "drago.lock", quiet)
     print("")
     out.print_summary_ok(str.concat("Added ", str.concat(title, str.concat(" ", out.format_ms(elapsed_external)))), quiet)
     return true
+
   if (utils.is_empty(pkg)):
     out.print_error("add requires package name")
     return false
+
   let title = pkg
   if (utils.is_empty(wanted) == false):
     title = str.concat(pkg, str.concat("@", wanted))
+
   out.print_action("📦", str.concat("Adding ", title), quiet)
   let info = registry.find_package(pkg, offline)
   let tier = registry.info_tier(info)
@@ -803,12 +953,15 @@ func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32, package_name: ptr
     print("     Continue? [y/N] y")
     if (str.str_eq(env_yes, "1") == false):
       print("     Tip: DRAGO_YES=1 is optional (useful for CI/non-interactive runs).")
+
   let add_rc = registry.reg_add_dependency(target_root, pkg, wanted, offline)
   if (add_rc == 0):
     out.print_summary_fail("Add failed")
     return false
+
   if (sync_workspace_lock(root, quiet) == 0):
     return false
+
   let elapsed = time.now_ms() - started
   out.print_done("Updated", "drago.toml", quiet)
   out.print_done("Updated", "drago.lock", quiet)
@@ -816,6 +969,7 @@ func handle_add(root: ptr, pkg: ptr, version: ptr, quiet: i32, package_name: ptr
   if (str.str_eq(tier, "publish")):
     out.print_warning("Package is not audited yet. Run drago audit to check.", quiet)
     return true
+
   out.print_summary_ok(str.concat("Added ", str.concat(title, str.concat(" ", out.format_ms(elapsed)))), quiet)
   return true
 
@@ -823,17 +977,22 @@ func handle_remove(root: ptr, pkg: ptr, quiet: i32, package_name: ptr) -> bool:
   if (utils.is_empty(pkg)):
     out.print_error("remove requires package name")
     return false
+
   let target_root = selected_single_member_root(root, quiet, package_name, "remove")
   if (utils.is_empty(target_root)):
     return false
+
   let manifest_rc = manifest.remove_dependency(target_root, pkg)
   if (manifest_rc == 0):
     return false
+
   let lock_rc = lockfile.lock_remove(target_root, pkg)
   if (lock_rc == 0):
     return false
+
   if (sync_workspace_lock(root, quiet) == 0):
     return false
+
   out.print_success(str.concat("Removed ", pkg), quiet)
   return true
 
@@ -842,15 +1001,19 @@ func handle_install(root: ptr, quiet: i32, package_name: ptr, features: ptr, all
   let n = list.list_count(members)
   if (n == 0):
     return false
+
   out.print_action("📦", "Installing dependencies", quiet)
   let i: i64 = 0
   while (i < n):
     let install_rc = registry.reg_install_all(list.list_get(members, i), features, all_features, no_default_features, offline, yes)
     if (install_rc == 0):
       return false
+
     i = i + 1
+
   if (sync_workspace_lock(root, quiet) == 0):
     return false
+
   out.print_summary_ok("Dependencies installed", quiet)
   return true
 
@@ -858,9 +1021,11 @@ func handle_runtime_path(root: ptr, dep_name: ptr, asset_dir: ptr, quiet: i32, p
   if (utils.is_empty(dep_name)):
     out.print_error("runtime-path requires package name")
     return false
+
   let target_root = selected_single_member_root(root, quiet, package_name, "runtime-path")
   if (utils.is_empty(target_root)):
     return false
+
   let locks = lockfile.load_lines(target_root)
   let i: i64 = 0
   let n = list.list_count(locks)
@@ -872,38 +1037,40 @@ func handle_runtime_path(root: ptr, dep_name: ptr, asset_dir: ptr, quiet: i32, p
         print(cache.runtime_package_dir(dep_name, dep_version))
       else:
         print(cache.runtime_asset_dir(dep_name, dep_version, asset_dir))
+
       return true
+
     i = i + 1
+
   out.print_error(str.concat("dependency not found in drago.lock: ", dep_name))
   return false
 
 func handle_update(root: ptr, dep_name: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32, offline: i32, yes: i32) -> bool:
   if (is_self_update_target(dep_name) != 0):
     return handle_toolchain_update(dep_name, quiet, offline)
+
   let members = selected_member_roots(root, quiet, package_name)
   let n = list.list_count(members)
   if (n == 0):
     return false
+
   out.print_action("📦", "Updating dependencies", quiet)
   let i: i64 = 0
   while (i < n):
     let update_rc = registry.reg_update_all(list.list_get(members, i), features, all_features, no_default_features, dep_name, offline, yes)
     if (update_rc == 0):
       return false
+
     i = i + 1
+
   if (sync_workspace_lock(root, quiet) == 0):
     return false
+
   out.print_summary_ok("Dependencies updated", quiet)
   return true
 
 func handle_fmt(root: ptr, quiet: i32) -> bool:
-  let cmd = str.concat(linker.thagc_bin(), str.concat(" fix doctor ", path.join(root, "src/main.tg")))
-  let rc = process.run(cmd)
-  if (rc != 0):
-    out.print_error("fmt/check pipeline failed (using thagc fix doctor fallback)")
-    return false
-  out.print_success("Format check completed", quiet)
-  return true
+  return fmt.run_fmt() == 0
 
 func handle_check_single(root: ptr, quiet: i32, features: ptr, all_features: i32, no_default_features: i32) -> bool:
   out.print_action("🔨", str.concat("Checking ", str.concat(project_name(root), str.concat(" v", project_version(root)))), quiet)
@@ -914,24 +1081,30 @@ func handle_check_single(root: ptr, quiet: i32, features: ptr, all_features: i32
     if (fs.exists(target_dir) == 0):
       out.print_error(str.concat("cannot create target directory: ", target_dir))
       return false
+
   let out_file = path.join(target_dir, "check.bin")
   let out_file_ll = str.concat(out_file, ".ll")
   if (fs.exists(out_file) != 0):
     fs.remove_path(out_file)
+
   if (fs.exists(out_file_ll) != 0):
     fs.remove_path(out_file_ll)
+
   let cmd = str.concat(linker.thagc_bin(), str.concat(" build ", str.concat(entry, str.concat(" --emit-llvm -o ", out_file))))
   let feature_args = linker.feature_cli_args(features, all_features, no_default_features)
   if (str.str_eq(feature_args, "") == false):
     cmd = str.concat(cmd, feature_args)
+
   let captured = process.capture(str.concat(cmd, " 2>&1"))
   if (fs.exists(out_file) == 0):
     if (fs.exists(out_file_ll) != 0):
       out.print_summary_ok(str.concat("Typecheck/build check passed ", out.format_ms(time.now_ms() - started)), quiet)
       return true
+
     out.print_compiler_errors(captured)
     out.print_summary_fail("Check failed")
     return false
+
   out.print_summary_ok(str.concat("Typecheck/build check passed ", out.format_ms(time.now_ms() - started)), quiet)
   return true
 
@@ -940,13 +1113,17 @@ func handle_check(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_f
   let n = list.list_count(members)
   if (n == 0):
     return false
+
   if (n > 1):
     out.print_action("🧩", str.concat("Checking workspace (", str.concat(str.from_int(n), " members)")), quiet)
+
   let i: i64 = 0
   while (i < n):
     if (handle_check_single(list.list_get(members, i), quiet, features, all_features, no_default_features) == false):
       return false
+
     i = i + 1
+
   return true
 
 func handle_test(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32) -> bool:
@@ -954,13 +1131,17 @@ func handle_test(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_fe
   let n = list.list_count(members)
   if (n == 0):
     return false
+
   if (n > 1):
     out.print_action("🧩", str.concat("Testing workspace (", str.concat(str.from_int(n), " members)")), quiet)
+
   let i: i64 = 0
   while (i < n):
     if (test_runner.run_tests(list.list_get(members, i), quiet, features, all_features, no_default_features) == 0):
       return false
+
     i = i + 1
+
   return true
 
 func handle_publish(root: ptr, quiet: i32) -> bool:
@@ -974,6 +1155,7 @@ func handle_audit(root: ptr, quiet: i32, offline: i32) -> bool:
     out.print_summary_ok("No known issues found", quiet)
   else:
     out.print_warning("Known issues detected", quiet)
+
   return true
 
 func main() -> i32:
@@ -997,27 +1179,34 @@ func main() -> i32:
   let offline = offline_flag
   if (str.str_eq(process.env("DRAGO_OFFLINE"), "1")):
     offline = 1
+
   let root = project_root()
   if (verbose != 0):
     print(str.concat("drago root: ", root))
+
   if (str.str_eq(cmd, "help") == false):
     if (str.str_eq(cmd, "version") == false):
       if (enforce_mode_guards(cmd, arg1, locked, frozen, offline) == false):
         return 1
+
       let effective_locked = locked
       if (frozen != 0):
         effective_locked = 1
+
       if (effective_locked != 0):
         if (command_requires_lock_consistency(cmd, arg1) != 0):
           if (verify_locked_dependencies(root, quiet, package_name, features, all_features, no_default_features) == 0):
             out.print_error("lockfile is out of sync (use install/update without --locked to refresh)")
             return 1
+
       if (offline != 0):
         if (verbose != 0):
           print("drago mode: offline")
+
       if (frozen != 0):
         if (verbose != 0):
           print("drago mode: frozen")
+
       if (locked != 0):
         if (verbose != 0):
           print("drago mode: locked")
@@ -1025,9 +1214,11 @@ func main() -> i32:
   if (str.str_eq(cmd, "help")):
     usage()
     return 0
+
   if (str.str_eq(cmd, "version")):
     print(str.concat("drago ", drago_version()))
     return 0
+
   if (str.str_eq(cmd, "new")):
     if (scaffold.create_project(arg1) != 0):
       out.print_action("✨", str.concat("Created ", arg1), quiet)
@@ -1041,78 +1232,115 @@ func main() -> i32:
       print(str.concat("    cd ", arg1))
       print("    drago run")
       return 0
+
     return 1
+
   if (str.str_eq(cmd, "build")):
     if (handle_build(root, quiet, package_name, features, all_features, no_default_features)):
       return 0
+
     return 1
+
   if (str.str_eq(cmd, "run")):
     if (handle_run(root, quiet, package_name, features, all_features, no_default_features)):
       return 0
+
     return 1
+
   if (str.str_eq(cmd, "test")):
     if (handle_test(root, quiet, package_name, features, all_features, no_default_features)):
       return 0
+
     return 1
+
   if (str.str_eq(cmd, "add")):
     if (handle_add(root, arg1, arg2, quiet, package_name, offline, source_kind, source_value, source_alias, yes)):
       return 0
+
     return 1
+
   if (str.str_eq(cmd, "remove")):
     if (handle_remove(root, arg1, quiet, package_name)):
       return 0
+
     return 1
+
   if (str.str_eq(cmd, "install")):
     if (utils.is_empty(source_kind) == false):
       if (handle_add(root, arg1, arg2, quiet, package_name, offline, source_kind, source_value, source_alias, yes)):
         return 0
+
       return 1
+
     if (utils.is_empty(arg1) == false):
       if (handle_add(root, arg1, arg2, quiet, package_name, offline, source_kind, source_value, source_alias, yes)):
         return 0
+
       return 1
+
     if (handle_install(root, quiet, package_name, features, all_features, no_default_features, offline, yes)):
       return 0
+
     return 1
+
   if (str.str_eq(cmd, "update")):
     if (handle_update(root, arg1, quiet, package_name, features, all_features, no_default_features, offline, yes)):
       return 0
+
     return 1
+
   if (str.str_eq(cmd, "publish")):
     if (handle_publish(root, quiet)):
       return 0
+
     return 1
+
   if (str.str_eq(cmd, "fmt")):
     if (handle_fmt(root, quiet)):
       return 0
+
     return 1
+
   if (str.str_eq(cmd, "check")):
     if (handle_check(root, quiet, package_name, features, all_features, no_default_features)):
       return 0
+
     return 1
+
   if (str.str_eq(cmd, "cache")):
     if (handle_cache(arg1, quiet)):
       return 0
+
     return 1
+
   if (str.str_eq(cmd, "audit")):
     if (handle_audit(root, quiet, offline)):
       return 0
+
     return 1
+
   if (str.str_eq(cmd, "tree")):
     if (handle_tree(root, quiet, package_name, features, all_features, no_default_features)):
       return 0
+
     return 1
+
   if (str.str_eq(cmd, "why")):
     if (handle_why(root, arg1, quiet, package_name, features, all_features, no_default_features)):
       return 0
+
     return 1
+
   if (str.str_eq(cmd, "outdated")):
     if (handle_outdated(root, quiet, package_name, features, all_features, no_default_features, offline)):
       return 0
+
     return 1
+
   if (str.str_eq(cmd, "runtime-path")):
     if (handle_runtime_path(root, arg1, arg2, quiet, package_name)):
       return 0
+
     return 1
 
   usage()

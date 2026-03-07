@@ -2,10 +2,9 @@ import lib.fs as fs
 import lib.map as map
 import lib.path as path
 import lib.toml as toml
+import src.core.utils as utils
 import std.list as list
 import std.string as str
-import src.core.utils as utils
-
 pub func manifest_path(project_root: ptr) -> ptr:
   return path.join(project_root, "drago.toml")
 
@@ -31,23 +30,28 @@ pub func parse_handle(project_root: ptr) -> ptr:
   let p = manifest_path(project_root)
   if (fs.exists(p) == 0):
     return toml.toml_parse(str.concat("", ""))
+
   let raw = fs.read_file(p)
   if (map.map_is_null_ptr(raw) == 1):
     return toml.toml_parse(str.concat("", ""))
+
   return toml.toml_parse(raw)
 
 pub func load_name(project_root: ptr) -> ptr:
   let h = parse_handle(project_root)
   if (map.map_is_null_ptr(h) == 1):
     return default_name()
+
   let pkg = toml.toml_get_section(h, "package")
   let out = toml.toml_get_str(pkg, "name")
   if (map.map_is_null_ptr(out) == 1):
     toml.toml_free(h)
     return default_name()
+
   if (utils.is_empty(out)):
     toml.toml_free(h)
     return default_name()
+
   toml.toml_free(h)
   return out
 
@@ -55,14 +59,17 @@ pub func load_version(project_root: ptr) -> ptr:
   let h = parse_handle(project_root)
   if (map.map_is_null_ptr(h) == 1):
     return default_version()
+
   let pkg = toml.toml_get_section(h, "package")
   let out = toml.toml_get_str(pkg, "version")
   if (map.map_is_null_ptr(out) == 1):
     toml.toml_free(h)
     return default_version()
+
   if (utils.is_empty(out)):
     toml.toml_free(h)
     return default_version()
+
   toml.toml_free(h)
   return out
 
@@ -70,14 +77,17 @@ pub func load_entry(project_root: ptr) -> ptr:
   let h = parse_handle(project_root)
   if (map.map_is_null_ptr(h) == 1):
     return default_entry()
+
   let pkg = toml.toml_get_section(h, "package")
   let out = toml.toml_get_str(pkg, "entry")
   if (map.map_is_null_ptr(out) == 1):
     toml.toml_free(h)
     return default_entry()
+
   if (utils.is_empty(out)):
     toml.toml_free(h)
     return default_entry()
+
   toml.toml_free(h)
   return out
 
@@ -85,11 +95,13 @@ pub func load_description(project_root: ptr) -> ptr:
   let h = parse_handle(project_root)
   if (map.map_is_null_ptr(h) == 1):
     return default_description()
+
   let pkg = toml.toml_get_section(h, "package")
   let out = toml.toml_get_str(pkg, "description")
   if (map.map_is_null_ptr(out) == 1):
     toml.toml_free(h)
     return default_description()
+
   toml.toml_free(h)
   return out
 
@@ -97,11 +109,13 @@ pub func load_license(project_root: ptr) -> ptr:
   let h = parse_handle(project_root)
   if (map.map_is_null_ptr(h) == 1):
     return default_license()
+
   let pkg = toml.toml_get_section(h, "package")
   let out = toml.toml_get_str(pkg, "license")
   if (map.map_is_null_ptr(out) == 1):
     toml.toml_free(h)
     return default_license()
+
   toml.toml_free(h)
   return out
 
@@ -109,11 +123,13 @@ pub func load_authors(project_root: ptr) -> ptr:
   let h = parse_handle(project_root)
   if (map.map_is_null_ptr(h) == 1):
     return default_authors()
+
   let pkg = toml.toml_get_section(h, "package")
   let out = toml.toml_get_str(pkg, "authors")
   if (map.map_is_null_ptr(out) == 1):
     toml.toml_free(h)
     return default_authors()
+
   toml.toml_free(h)
   return out
 
@@ -126,6 +142,7 @@ pub func load_dependencies(project_root: ptr) -> ptr:
     let line = list.list_get(meta, i)
     list.list_append(out, str.concat(str.concat(dep_meta_name(line), " = "), dep_meta_spec(line)))
     i = i + 1
+
   return out
 
 func default_runtime_dirs() -> ptr:
@@ -139,20 +156,24 @@ pub func package_runtime_dirs(project_root: ptr) -> ptr:
   let h = parse_handle(project_root)
   if (map.map_is_null_ptr(h) == 1):
     return default_runtime_dirs()
+
   let runtime = toml.toml_get_section(h, "package.runtime")
   if (map.map_is_null_ptr(runtime) == 1):
     toml.toml_free(h)
     return default_runtime_dirs()
+
   let dirs = toml.toml_get_str(runtime, "dirs")
   if (map.map_is_null_ptr(dirs) == 1):
     toml.toml_free(runtime)
     toml.toml_free(h)
     return default_runtime_dirs()
+
   let parsed = parse_runtime_dirs_value(dirs)
   toml.toml_free(runtime)
   toml.toml_free(h)
   if (list.list_count(parsed) == 0):
     return default_runtime_dirs()
+
   return parsed
 
 func append_all(dst: ptr, src: ptr):
@@ -162,7 +183,9 @@ func append_all(dst: ptr, src: ptr):
     let item = str.trim(list.list_get(src, i))
     if (utils.is_empty(item) == false):
       list.list_append(dst, item)
+
     i = i + 1
+
   return 0
 
 func parse_workspace_members_value(raw_value: ptr) -> ptr:
@@ -174,6 +197,7 @@ func parse_workspace_members_value(raw_value: ptr) -> ptr:
   let parts = str.split(value, ",")
   if (map.map_is_null_ptr(parts) == 1):
     return out
+
   let i: i64 = 0
   let n = list.list_count(parts)
   while (i < n):
@@ -182,7 +206,9 @@ func parse_workspace_members_value(raw_value: ptr) -> ptr:
     member = str.replace(member, "'", "")
     if (utils.is_empty(member) == false):
       list.list_append(out, member)
+
     i = i + 1
+
   return out
 
 func line_without_comment(raw_line: ptr) -> ptr:
@@ -192,8 +218,10 @@ func value_after_equals(raw_line: ptr) -> ptr:
   let parts = str.split(raw_line, "=")
   if (map.map_is_null_ptr(parts) == 1):
     return str.concat("", "")
+
   if (list.list_count(parts) < 2):
     return str.concat("", "")
+
   return str.trim(list.list_get(parts, 1))
 
 pub func load_workspace_members(project_root: ptr) -> ptr:
@@ -201,9 +229,11 @@ pub func load_workspace_members(project_root: ptr) -> ptr:
   let p = manifest_path(project_root)
   if (fs.exists(p) == 0):
     return out
+
   let raw = fs.read_file(p)
   if (map.map_is_null_ptr(raw) == 1):
     return out
+
   let lines = str.split(raw, "\n")
   if (map.map_is_null_ptr(lines) == 1):
     return out
@@ -224,6 +254,7 @@ pub func load_workspace_members(project_root: ptr) -> ptr:
       if (str.str_has(line, "]")):
         collecting_members = 0
         append_all(out, parse_workspace_members_value(members_buffer))
+
       i = i + 1
       continue
 
@@ -232,12 +263,14 @@ pub func load_workspace_members(project_root: ptr) -> ptr:
         in_workspace = 1
       else:
         in_workspace = 0
+
       i = i + 1
       continue
 
     if (in_workspace == 0):
       i = i + 1
       continue
+
     if (str.str_starts(line, "members") == false):
       i = i + 1
       continue
@@ -246,38 +279,47 @@ pub func load_workspace_members(project_root: ptr) -> ptr:
     if (utils.is_empty(members_buffer)):
       i = i + 1
       continue
+
     if (str.str_has(members_buffer, "[") == false):
       i = i + 1
       continue
+
     if (str.str_has(members_buffer, "]")):
       append_all(out, parse_workspace_members_value(members_buffer))
       members_buffer = str.concat("", "")
       i = i + 1
       continue
+
     collecting_members = 1
     i = i + 1
+
   return out
 
 func kv_key(raw_line: ptr) -> ptr:
   let parts = str.split(raw_line, "=")
   if (map.map_is_null_ptr(parts) == 1):
     return str.concat("", "")
+
   if (list.list_count(parts) == 0):
     return str.concat("", "")
+
   return str.trim(list.list_get(parts, 0))
 
 func kv_value(raw_line: ptr) -> ptr:
   let parts = str.split(raw_line, "=")
   if (map.map_is_null_ptr(parts) == 1):
     return str.concat("", "")
+
   let n = list.list_count(parts)
   if (n < 2):
     return str.concat("", "")
+
   let out = str.trim(list.list_get(parts, 1))
   let i: i64 = 2
   while (i < n):
     out = str.concat(out, str.concat("=", list.list_get(parts, i)))
     i = i + 1
+
   return str.trim(out)
 
 func strip_quote_pair(text: ptr) -> ptr:
@@ -295,13 +337,16 @@ func parse_array_values(raw_value: ptr) -> ptr:
   let parts = str.split(s, ",")
   if (map.map_is_null_ptr(parts) == 1):
     return out
+
   let i: i64 = 0
   let n = list.list_count(parts)
   while (i < n):
     let item = strip_quote_pair(list.list_get(parts, i))
     if (utils.is_empty(item) == false):
       list.list_append(out, item)
+
     i = i + 1
+
   return out
 
 func parse_runtime_dirs_value(raw_value: ptr) -> ptr:
@@ -311,13 +356,16 @@ func parse_runtime_dirs_value(raw_value: ptr) -> ptr:
   let parts = str.split(s, ",")
   if (map.map_is_null_ptr(parts) == 1):
     return out
+
   let i: i64 = 0
   let n = list.list_count(parts)
   while (i < n):
     let item = strip_quote_pair(list.list_get(parts, i))
     if (utils.is_empty(item) == false):
       list_append_unique(out, item)
+
     i = i + 1
+
   return out
 
 func list_contains(items: ptr, value: ptr) -> i32:
@@ -326,12 +374,15 @@ func list_contains(items: ptr, value: ptr) -> i32:
   while (i < n):
     if (str.str_eq(list.list_get(items, i), value)):
       return 1
+
     i = i + 1
+
   return 0
 
 func list_append_unique(items: ptr, value: ptr) -> i32:
   if (list_contains(items, value) != 0):
     return 0
+
   list.list_append(items, value)
   return 1
 
@@ -339,9 +390,11 @@ func dep_meta_line(name: ptr, spec: ptr, optional: i32, default_features: i32) -
   let opt = "0"
   if (optional != 0):
     opt = "1"
+
   let def = "0"
   if (default_features != 0):
     def = "1"
+
   let out = str.concat(name, "|")
   out = str.concat(out, spec)
   out = str.concat(out, "|")
@@ -354,8 +407,10 @@ func dep_meta_part(line: ptr, idx: i64) -> ptr:
   let parts = str.split(line, "|")
   if (map.map_is_null_ptr(parts) == 1):
     return str.concat("", "")
+
   if (list.list_count(parts) <= idx):
     return str.concat("", "")
+
   return list.list_get(parts, idx)
 
 func dep_meta_name(line: ptr) -> ptr:
@@ -367,6 +422,7 @@ func dep_meta_spec(line: ptr) -> ptr:
 func dep_meta_optional(line: ptr) -> i32:
   if (str.str_eq(dep_meta_part(line, 2), "1")):
     return 1
+
   return 0
 
 func inline_field(raw_inline: ptr, field_name: ptr) -> ptr:
@@ -376,6 +432,7 @@ func inline_field(raw_inline: ptr, field_name: ptr) -> ptr:
   let parts = str.split(body, ",")
   if (map.map_is_null_ptr(parts) == 1):
     return str.concat("", "")
+
   let i: i64 = 0
   let n = list.list_count(parts)
   while (i < n):
@@ -383,36 +440,44 @@ func inline_field(raw_inline: ptr, field_name: ptr) -> ptr:
     let key = kv_key(token)
     if (str.str_eq(key, field_name)):
       return str.trim(kv_value(token))
+
     i = i + 1
+
   return str.concat("", "")
 
 func parse_dependency_spec_text(raw_line: ptr) -> ptr:
   let rhs = kv_value(raw_line)
   if (utils.is_empty(rhs)):
     return str.concat("", "")
+
   return str.trim(rhs)
 
 pub func dependency_inline_field(dep_line: ptr, field_name: ptr) -> ptr:
   let spec = dependency_spec(dep_line)
   if (str.str_starts(spec, "{") == false):
     return str.concat("", "")
+
   return strip_quote_pair(inline_field(spec, field_name))
 
 pub func dependency_source_kind(dep_line: ptr) -> ptr:
   let git = dependency_inline_field(dep_line, "git")
   if (utils.is_empty(git) == false):
     return str.concat("", "git")
+
   let local_path = dependency_inline_field(dep_line, "path")
   if (utils.is_empty(local_path) == false):
     return str.concat("", "path")
+
   return str.concat("", "registry")
 
 pub func dependency_source_value(dep_line: ptr) -> ptr:
   let kind = dependency_source_kind(dep_line)
   if (str.str_eq(kind, "git")):
     return dependency_inline_field(dep_line, "git")
+
   if (str.str_eq(kind, "path")):
     return dependency_inline_field(dep_line, "path")
+
   return str.concat("", "")
 
 pub func dependency_version_value(dep_line: ptr) -> ptr:
@@ -422,8 +487,10 @@ pub func dependency_version_value(dep_line: ptr) -> ptr:
       let git_ref = dependency_inline_field(dep_line, "ref")
       if (utils.is_empty(git_ref) == false):
         return str.trim(git_ref)
+
     let version = dependency_inline_field(dep_line, "version")
     return str.trim(version)
+
   return strip_quote_pair(spec)
 
 pub func registry_dep_spec(version: ptr) -> ptr:
@@ -432,9 +499,11 @@ pub func registry_dep_spec(version: ptr) -> ptr:
 pub func dependency_ref_value(dep_line: ptr) -> ptr:
   if (str.str_eq(dependency_source_kind(dep_line), "git") == false):
     return str.concat("", "")
+
   let git_ref = dependency_inline_field(dep_line, "ref")
   if (utils.is_empty(git_ref) == false):
     return str.trim(git_ref)
+
   return dependency_inline_field(dep_line, "version")
 
 pub func external_dep_spec(kind: ptr, version: ptr, value: ptr) -> ptr:
@@ -442,8 +511,10 @@ pub func external_dep_spec(kind: ptr, version: ptr, value: ptr) -> ptr:
     let out = str.concat("{ git = \"", str.concat(value, "\""))
     if (utils.is_empty(version) == false):
       out = str.concat(out, str.concat(", ref = \"", str.concat(version, "\"")))
+
     out = str.concat(out, " }")
     return out
+
   let out = str.concat("{ version = \"", str.concat(version, "\""))
   out = str.concat(out, str.concat(", path = \"", str.concat(value, "\"")))
   out = str.concat(out, " }")
@@ -453,9 +524,11 @@ func parse_dependency_meta_line(raw_line: ptr) -> ptr:
   let line = str.trim(raw_line)
   if (utils.is_empty(line)):
     return str.concat("", "")
+
   let name = kv_key(line)
   if (utils.is_empty(name)):
     return str.concat("", "")
+
   let rhs = kv_value(line)
   if (utils.is_empty(rhs)):
     return str.concat("", "")
@@ -467,9 +540,11 @@ func parse_dependency_meta_line(raw_line: ptr) -> ptr:
     let opt = str.trim(inline_field(rhs, "optional"))
     if (str.str_eq(opt, "true")):
       optional = 1
+
     let defv = str.trim(inline_field(rhs, "default-features"))
     if (str.str_eq(defv, "false")):
       default_features = 0
+
   return dep_meta_line(name, spec, optional, default_features)
 
 func collect_dependency_meta(project_root: ptr) -> ptr:
@@ -477,9 +552,11 @@ func collect_dependency_meta(project_root: ptr) -> ptr:
   let p = manifest_path(project_root)
   if (fs.exists(p) == 0):
     return out
+
   let raw = fs.read_file(p)
   if (map.map_is_null_ptr(raw) == 1):
     return out
+
   let lines = str.split(raw, "\n")
   if (map.map_is_null_ptr(lines) == 1):
     return out
@@ -492,20 +569,26 @@ func collect_dependency_meta(project_root: ptr) -> ptr:
     if (utils.is_empty(line)):
       i = i + 1
       continue
+
     if (str.str_starts(line, "[")):
       if (str.str_eq(line, "[dependencies]")):
         in_deps = 1
       else:
         in_deps = 0
+
       i = i + 1
       continue
+
     if (in_deps == 0):
       i = i + 1
       continue
+
     let meta = parse_dependency_meta_line(line)
     if (utils.is_empty(meta) == false):
       list.list_append(out, meta)
+
     i = i + 1
+
   return out
 
 func collect_feature_lines(project_root: ptr) -> ptr:
@@ -513,9 +596,11 @@ func collect_feature_lines(project_root: ptr) -> ptr:
   let p = manifest_path(project_root)
   if (fs.exists(p) == 0):
     return out
+
   let raw = fs.read_file(p)
   if (map.map_is_null_ptr(raw) == 1):
     return out
+
   let lines = str.split(raw, "\n")
   if (map.map_is_null_ptr(lines) == 1):
     return out
@@ -531,6 +616,7 @@ func collect_feature_lines(project_root: ptr) -> ptr:
     if (utils.is_empty(line)):
       i = i + 1
       continue
+
     if (collecting != 0):
       cur_val = str.concat(cur_val, line)
       if (str.str_has(line, "]")):
@@ -544,28 +630,37 @@ func collect_feature_lines(project_root: ptr) -> ptr:
             encoded = str.concat(encoded, list.list_get(items, j))
           else:
             encoded = str.concat(encoded, str.concat(",", list.list_get(items, j)))
+
           j = j + 1
+
         list.list_append(out, encoded)
+
       i = i + 1
       continue
+
     if (str.str_starts(line, "[")):
       if (str.str_eq(line, "[features]")):
         in_features = 1
       else:
         in_features = 0
+
       i = i + 1
       continue
+
     if (in_features == 0):
       i = i + 1
       continue
+
     cur_key = kv_key(line)
     cur_val = kv_value(line)
     if (utils.is_empty(cur_key)):
       i = i + 1
       continue
+
     if (str.str_has(cur_val, "[") == false):
       i = i + 1
       continue
+
     if (str.str_has(cur_val, "]")):
       let items = parse_array_values(cur_val)
       let encoded = str.concat(cur_key, "|")
@@ -576,12 +671,16 @@ func collect_feature_lines(project_root: ptr) -> ptr:
           encoded = str.concat(encoded, list.list_get(items, j))
         else:
           encoded = str.concat(encoded, str.concat(",", list.list_get(items, j)))
+
         j = j + 1
+
       list.list_append(out, encoded)
       i = i + 1
       continue
+
     collecting = 1
     i = i + 1
+
   return out
 
 func feature_items_csv(features: ptr, feature_name: ptr) -> ptr:
@@ -595,8 +694,11 @@ func feature_items_csv(features: ptr, feature_name: ptr) -> ptr:
       if (str.str_eq(key, feature_name)):
         if (list.list_count(parts) >= 2):
           return list.list_get(parts, 1)
+
         return str.concat("", "")
+
     i = i + 1
+
   return str.concat("", "")
 
 func feature_names(features: ptr) -> ptr:
@@ -610,7 +712,9 @@ func feature_names(features: ptr) -> ptr:
       let key = str.trim(list.list_get(parts, 0))
       if (utils.is_empty(key) == false):
         list_append_unique(out, key)
+
     i = i + 1
+
   return out
 
 func dep_feature_target(item: ptr) -> ptr:
@@ -618,6 +722,7 @@ func dep_feature_target(item: ptr) -> ptr:
   if (str.str_starts(token, "dep:")):
     let n = str.slen(token)
     return str.substr(token, 4, n - 4)
+
   return token
 
 pub func load_dependencies_for_features(project_root: ptr, feature_csv: ptr, all_features: i32, no_default_features: i32) -> ptr:
@@ -632,6 +737,7 @@ pub func load_dependencies_for_features(project_root: ptr, feature_csv: ptr, all
   else:
     if (no_default_features == 0):
       list_append_unique(enabled_features, "default")
+
     append_all(enabled_features, parse_array_values(str.concat("[", str.concat(feature_csv, "]"))))
 
   let changed = 1
@@ -652,9 +758,12 @@ pub func load_dependencies_for_features(project_root: ptr, feature_csv: ptr, all
         else:
           if (list_append_unique(enabled_features, item) != 0):
             changed = 1
+
           if (list_append_unique(enabled_optional_deps, item) != 0):
             changed = 1
+
         j = j + 1
+
       i = i + 1
 
   if (all_features != 0):
@@ -664,6 +773,7 @@ pub func load_dependencies_for_features(project_root: ptr, feature_csv: ptr, all
       let d = list.list_get(meta, i)
       if (dep_meta_optional(d) != 0):
         list_append_unique(enabled_optional_deps, dep_meta_name(d))
+
       i = i + 1
 
   let out = list.list_new()
@@ -677,10 +787,13 @@ pub func load_dependencies_for_features(project_root: ptr, feature_csv: ptr, all
     let include = 1
     if (optional != 0):
       include = list_contains(enabled_optional_deps, name)
+
     if (include != 0):
       let line = str.concat(str.concat(name, " = "), spec)
       list.list_append(out, line)
+
     i = i + 1
+
   return out
 
 pub func to_toml(name: ptr, version: ptr, entry: ptr, description: ptr, license: ptr, authors: ptr, dependencies: ptr) -> ptr:
@@ -699,6 +812,7 @@ pub func to_toml(name: ptr, version: ptr, entry: ptr, description: ptr, license:
     out = str.concat(out, list.list_get(dependencies, i))
     out = str.concat(out, "\n")
     i = i + 1
+
   return out
 
 pub func save(project_root: ptr, name: ptr, version: ptr, entry: ptr, description: ptr, license: ptr, authors: ptr, dependencies: ptr) -> i32:
@@ -709,9 +823,11 @@ pub func dependency_name(dep_line: ptr) -> ptr:
   let parts = str.split(dep_line, "=")
   if (map.map_is_null_ptr(parts) == 1):
     return str.concat("", "")
+
   let one: i64 = 1
   if (list.list_count(parts) < one):
     return str.concat("", "")
+
   return str.trim(list.list_get(parts, 0))
 
 pub func dependency_spec(dep_line: ptr) -> ptr:
@@ -726,9 +842,11 @@ func save_manifest_lines(project_root: ptr, lines: ptr) -> i32:
   let n = list.list_count(lines)
   while (i < n):
     out = str.concat(out, list.list_get(lines, i))
-    if (i < (n - 1)):
+    if (i < n - 1):
       out = str.concat(out, "\n")
+
     i = i + 1
+
   return fs.write_file(manifest_path(project_root), out)
 
 func dependency_lines_updated(project_root: ptr, dep_name: ptr, dep_spec: ptr, remove_only: i32) -> ptr:
@@ -738,6 +856,7 @@ func dependency_lines_updated(project_root: ptr, dep_name: ptr, dep_spec: ptr, r
   if (map.map_is_null_ptr(raw) == 1):
     if (remove_only != 0):
       return out
+
     list.list_append(out, "[package]")
     list.list_append(out, str.concat("name = \"", str.concat(default_name(), "\"")))
     list.list_append(out, str.concat("version = \"", str.concat(default_version(), "\"")))
@@ -749,6 +868,7 @@ func dependency_lines_updated(project_root: ptr, dep_name: ptr, dep_spec: ptr, r
     list.list_append(out, "[dependencies]")
     list.list_append(out, dependency_entry_line(dep_name, dep_spec))
     return out
+
   let lines = str.split(raw, "\n")
   if (map.map_is_null_ptr(lines) == 1):
     return out
@@ -767,53 +887,66 @@ func dependency_lines_updated(project_root: ptr, dep_name: ptr, dep_spec: ptr, r
           if (applied == 0):
             list.list_append(out, dependency_entry_line(dep_name, dep_spec))
             applied = 1
+
         in_deps = 0
         list.list_append(out, raw_line)
         i = i + 1
         continue
+
       if (utils.is_empty(line)):
         list.list_append(out, raw_line)
         i = i + 1
         continue
+
       if (str.str_eq(dependency_name(line), dep_name)):
         if (remove_only == 0):
           list.list_append(out, dependency_entry_line(dep_name, dep_spec))
+
         applied = 1
         i = i + 1
         continue
+
       list.list_append(out, raw_line)
       i = i + 1
       continue
+
     list.list_append(out, raw_line)
     if (str.str_eq(line, "[dependencies]")):
       in_deps = 1
       saw_deps = 1
+
     i = i + 1
 
   if (in_deps != 0):
     if (remove_only == 0):
       if (applied == 0):
         list.list_append(out, dependency_entry_line(dep_name, dep_spec))
+
     return out
 
   if (remove_only != 0):
     return out
+
   if (saw_deps == 0):
     if (list.list_count(out) != 0):
       let last_line = str.trim(list.list_get(out, list.list_count(out) - 1))
       if (utils.is_empty(last_line) == false):
         list.list_append(out, "")
+
     list.list_append(out, "[dependencies]")
     list.list_append(out, dependency_entry_line(dep_name, dep_spec))
+
   return out
 
 pub func add_dependency(project_root: ptr, dep_name: ptr, dep_spec: ptr) -> i32:
   if (utils.is_valid_package_name(dep_name) == false):
     print(str.concat("ERROR: invalid dependency name `", str.concat(dep_name, "` — use only letters, digits, `_`, or `-` (no dots)")))
     return 0
+
   return save_manifest_lines(project_root, dependency_lines_updated(project_root, dep_name, dep_spec, 0))
 
 pub func remove_dependency(project_root: ptr, dep_name: ptr) -> i32:
   if (fs.exists(manifest_path(project_root)) == 0):
     return 1
+
   return save_manifest_lines(project_root, dependency_lines_updated(project_root, dep_name, str.concat("", ""), 1))

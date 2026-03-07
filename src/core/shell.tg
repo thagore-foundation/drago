@@ -1,22 +1,24 @@
 import lib.fs as fs
 import lib.process as process
+import src.core.utils as utils
 import std.list as list
 import std.string as str
-import src.core.utils as utils
-
 func is_windows() -> bool:
   return str.str_eq(process.env("OS"), "Windows_NT")
 
 pub func null_dev() -> ptr:
   if (is_windows()):
     return str.concat("", "NUL")
+
   return str.concat("", "/dev/null")
 
 func wrap_ps(cmd: ptr) -> ptr:
+
   # Use -NoProfile for speed and to avoid user profile side-effects.
   return str.concat("powershell -NoProfile -Command \"", str.concat(cmd, "\""))
 
 pub func lower_hex(s: ptr) -> ptr:
+
   # Minimal lowercase conversion for hex strings (A-F) to avoid needing full unicode tables.
   let text = str.concat("", s)
   let i: i64 = 0
@@ -43,28 +45,37 @@ pub func lower_hex(s: ptr) -> ptr:
                 out = str.concat(out, "f")
               else:
                 out = str.concat(out, ch)
+
     i = i + 1
+
   return out
 
 pub func fetch_text(url: ptr, offline_mode: i32) -> ptr:
   let offline = offline_mode
   if (str.str_eq(process.env("DRAGO_OFFLINE"), "1")):
     offline = 1
+
   # Allow file:// reads even in offline mode.
+
   let file_prefix = str.concat("file:", str.concat("/", "/"))
   if (utils.utils_starts_with(url, file_prefix)):
     let p = str.substr(url, str.slen(file_prefix), str.slen(url) - str.slen(file_prefix))
     if (is_windows() == false):
       let cmd = str.concat("cat \"", str.concat(p, "\""))
       return process.capture(cmd)
+
     let ps = str.concat("& { Get-Content -Raw -Path '", str.concat(p, "' }"))
     return process.capture(wrap_ps(ps))
+
   if (offline != 0):
     return str.concat("", "")
+
   if (is_windows() == false):
     let cmd = str.concat("curl -fsSL \"", str.concat(url, "\""))
     return process.capture(cmd)
+
   # Windows: use Invoke-WebRequest to get content.
+
   let ps = str.concat("& { (Invoke-WebRequest -UseBasicParsing -Uri '", str.concat(url, "').Content }"))
   return process.capture(wrap_ps(ps))
 
@@ -72,6 +83,7 @@ pub func download(url: ptr, out_path: ptr) -> i32:
   if (is_windows() == false):
     let cmd = str.concat("curl -fsSL \"", str.concat(url, str.concat("\" -o \"", str.concat(out_path, "\""))))
     return process.run(cmd)
+
   let ps_prefix = "& { Invoke-WebRequest -UseBasicParsing -Uri '"
   let ps_mid = "' -OutFile '"
   let ps_suffix = "' }"
@@ -84,10 +96,13 @@ pub func sha256(file_path: ptr) -> ptr:
     let out = process.capture(cmd)
     if (utils.is_empty(out)):
       return str.concat("", "")
+
     let parts = str.split(out, " ")
     if (list.list_count(parts) == 0):
       return str.concat("", "")
+
     return lower_hex(str.trim(list.list_get(parts, 0)))
+
   let ps_prefix = "& { (Get-FileHash -Algorithm SHA256 -Path '"
   let ps_suffix = "').Hash) }"
   let ps = str.concat(ps_prefix, str.concat(file_path, ps_suffix))
@@ -97,27 +112,34 @@ pub func untar(archive_path: ptr, dest_dir: ptr) -> i32:
   if (fs.mkdir(dest_dir) == 0):
     if (fs.exists(dest_dir) == 0):
       return 0
+
   let cmd = str.concat("tar -xzf \"", str.concat(archive_path, str.concat("\" --strip-components=1 -C \"", str.concat(dest_dir, "\""))))
   return process.run(cmd)
 
 pub func clone_git(url: ptr, git_ref: ptr, dest_dir: ptr) -> i32:
   if (fs.exists(dest_dir) != 0):
     fs.remove_path(dest_dir)
+
   if (is_windows() == false):
     let clone_cmd = str.concat("git clone --depth 1 ", str.concat("\"", str.concat(url, str.concat("\" ", str.concat("\"", str.concat(dest_dir, "\""))))))
     if (utils.is_empty(git_ref) == false):
       clone_cmd = str.concat("git clone --depth 1 --branch ", str.concat("\"", str.concat(git_ref, str.concat("\" ", str.concat("\"", str.concat(url, str.concat("\" ", str.concat("\"", str.concat(dest_dir, "\"")))))))))
+
     return process.run(clone_cmd)
+
   let clone_ps = str.concat("& { git clone --depth 1 ", str.concat("\"", str.concat(url, str.concat("\" ", str.concat("\"", str.concat(dest_dir, "\" | Out-Null }"))))))
   if (utils.is_empty(git_ref) == false):
     clone_ps = str.concat("& { git clone --depth 1 --branch ", str.concat("\"", str.concat(git_ref, str.concat("\" ", str.concat("\"", str.concat(url, str.concat("\" ", str.concat("\"", str.concat(dest_dir, "\" | Out-Null }")))))))))
+
   return process.run(wrap_ps(clone_ps))
 
 pub func copy_dir(src_dir: ptr, dest_dir: ptr) -> i32:
   if (fs.exists(dest_dir) != 0):
     fs.remove_path(dest_dir)
+
   if (is_windows() == false):
     let cmd = str.concat("cp -R ", str.concat("\"", str.concat(src_dir, str.concat("\" ", str.concat("\"", str.concat(dest_dir, "\""))))))
     return process.run(cmd)
+
   let ps = str.concat("& { Copy-Item -Path ", str.concat("\"", str.concat(src_dir, str.concat("\" -Destination ", str.concat("\"", str.concat(dest_dir, "\" -Recurse -Force }"))))))
   return process.run(wrap_ps(ps))

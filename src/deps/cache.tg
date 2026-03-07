@@ -2,14 +2,14 @@ import lib.fs as fs
 import lib.map as map
 import lib.path as path
 import lib.process as process
+import src.core.utils as utils
 import std.list as list
 import std.string as str
-import src.core.utils as utils
-
 pub func home_dir() -> ptr:
   let h = process.env("HOME")
   if (utils.is_empty(h)):
     return str.concat("", ".")
+
   return h
 
 pub func thagore_root() -> ptr:
@@ -31,18 +31,23 @@ pub func ensure_layout() -> i32:
   let mk_root = fs.mkdir(thagore_root())
   if (mk_root == 0):
     return 0
+
   let mk_cache = fs.mkdir(cache_root())
   if (mk_cache == 0):
     return 0
+
   let mk_packages = fs.mkdir(packages_root())
   if (mk_packages == 0):
     return 0
+
   let mk_compiled = fs.mkdir(compiled_root())
   if (mk_compiled == 0):
     return 0
+
   let mk_runtimes = fs.mkdir(runtimes_root())
   if (mk_runtimes == 0):
     return 0
+
   return 1
 
 pub func package_dir(name: ptr, version: ptr) -> ptr:
@@ -68,6 +73,7 @@ pub func write_meta(name: ptr, version: ptr, target: ptr, thagc_version: ptr, ch
   let mk_dir = fs.mkdir(dir)
   if (mk_dir == 0):
     return 0
+
   let body = str.concat("", "{\n  \"thagc_version\": \"")
   body = str.concat(body, thagc_version)
   body = str.concat(body, "\",\n  \"target\": \"")
@@ -84,25 +90,31 @@ pub func meta_valid(name: ptr, version: ptr, target: ptr, thagc_version: ptr, ch
   let exists_p = fs.exists(p)
   if (exists_p == 0):
     return 0
+
   let body = fs.read_file(p)
   if (map.map_is_null_ptr(body) == 1):
     return 0
+
   if (str.str_has(body, thagc_version)):
     body = body
   else:
     return 0
+
   if (str.str_has(body, target)):
     body = body
   else:
     return 0
+
   if (str.str_has(body, checksum)):
     body = body
   else:
     return 0
+
   if (str.str_has(body, flags)):
     body = body
   else:
     return 0
+
   return 1
 
 pub func list_packages() -> ptr:
@@ -110,6 +122,7 @@ pub func list_packages() -> ptr:
   let names = fs.readdir(packages_root())
   if (map.map_is_null_ptr(names) == 1):
     return str.split("", "\n")
+
   return names
 
 pub func cache_size_bytes() -> i64:
@@ -117,9 +130,11 @@ pub func cache_size_bytes() -> i64:
   let layout_ok = ensure_layout()
   if (layout_ok == 0):
     return zero
+
   let files = fs.readdir(cache_root())
   if (map.map_is_null_ptr(files) == 1):
     return zero
+
   let i: i64 = 0
   let n = list.list_count(files)
   let total: i64 = zero
@@ -129,28 +144,35 @@ pub func cache_size_bytes() -> i64:
     let s = fs.filesize(p)
     if (s > 0):
       total = total + s
+
     i = i + 1
+
   return total
 
 pub func clean_compiled() -> i32:
   let has_compiled = fs.exists(compiled_root())
   if (has_compiled != 0):
     fs.remove_path(compiled_root())
+
   return fs.mkdir(compiled_root())
 
 pub func purge_all() -> i32:
   let has_cache = fs.exists(cache_root())
   if (has_cache != 0):
     fs.remove_path(cache_root())
+
   let has_packages = fs.exists(packages_root())
   if (has_packages != 0):
     fs.remove_path(packages_root())
+
   let has_compiled = fs.exists(compiled_root())
   if (has_compiled != 0):
     fs.remove_path(compiled_root())
+
   let has_runtimes = fs.exists(runtimes_root())
   if (has_runtimes != 0):
     fs.remove_path(runtimes_root())
+
   return ensure_layout()
 
 pub func purge_unused() -> i32:

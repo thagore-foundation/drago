@@ -1,0 +1,153 @@
+import lib.fs as fs
+import lib.path as path
+import lib.process as process
+import src.cli.output as out
+import src.core.utils as utils
+import std.list as list
+import std.string as str
+func quote_arg(value: ptr) -> ptr:
+  let escaped = str.replace(value, "'", "'\"'\"'")
+  return str.concat("'", str.concat(escaped, "'"))
+
+func dirname_unix(full: ptr) -> ptr:
+  let parts = str.split(full, "/")
+  let n = list.list_count(parts)
+  if (n <= 1):
+    return str.concat("", "")
+
+  let out = str.concat("", "")
+  let i: i64 = 0
+  while (i < n - 1):
+    let part = list.list_get(parts, i)
+    if (i == 0):
+      out = part
+    else:
+      out = str.concat(out, str.concat("/", part))
+
+    i = i + 1
+
+  return out
+
+func dirname_windows(full: ptr) -> ptr:
+  let parts = str.split(full, "\\")
+  let n = list.list_count(parts)
+  if (n <= 1):
+    return str.concat("", "")
+
+  let out = str.concat("", "")
+  let i: i64 = 0
+  while (i < n - 1):
+    let part = list.list_get(parts, i)
+    if (i == 0):
+      out = part
+    else:
+      out = str.concat(out, str.concat("\\", part))
+
+    i = i + 1
+
+  return out
+
+func binary_dir() -> ptr:
+  let argv0 = process.argv(0)
+  let unix_dir = dirname_unix(argv0)
+  if (utils.is_empty(unix_dir) == false):
+    return unix_dir
+
+  return dirname_windows(argv0)
+
+func same_dir_candidate(name: ptr) -> ptr:
+  let dir = binary_dir()
+  if (utils.is_empty(dir)):
+    return str.concat("", "")
+
+  return path.join(dir, name)
+
+func find_fmt_binary() -> ptr:
+  let direct = same_dir_candidate("thagore-fmt")
+  if (utils.is_empty(direct) == false):
+    if (fs.exists(direct) != 0):
+      return direct
+
+  let direct_exe = same_dir_candidate("thagore-fmt.exe")
+  if (utils.is_empty(direct_exe) == false):
+    if (fs.exists(direct_exe) != 0):
+      return direct_exe
+
+  let found = str.trim(process.capture("command -v thagore-fmt 2>/dev/null"))
+  if (utils.is_empty(found) == false):
+    return found
+
+  found = str.trim(process.capture("which thagore-fmt 2>/dev/null"))
+  if (utils.is_empty(found) == false):
+    return found
+
+  found = str.trim(process.capture("where thagore-fmt 2>nul"))
+  if (utils.is_empty(found) == false):
+    return found
+
+  return str.concat("", "")
+
+func fmt_arg_start_index() -> i32:
+  let argc = process.argc()
+  let i = 1
+  while (i < argc):
+    if (str.str_eq(process.argv(i), "fmt")):
+      return i + 1
+
+    i = i + 1
+
+  return argc
+
+func has_non_flag_arg(args: ptr) -> bool:
+  let i: i64 = 0
+  let n = list.list_count(args)
+  while (i < n):
+    let item = list.list_get(args, i)
+    if (utils.utils_starts_with(item, "-") == false):
+      return true
+
+    i = i + 1
+
+  return false
+
+func collect_forward_args() -> ptr:
+  let args = list.list_new()
+  let start = fmt_arg_start_index()
+  let argc = process.argc()
+  let i = start
+  while (i < argc):
+    list.list_append(args, process.argv(i))
+    i = i + 1
+
+  if (has_non_flag_arg(args) == false):
+    list.list_append(args, "--project")
+
+  return args
+
+func join_args(args: ptr) -> ptr:
+  let out = str.concat("", "")
+  let i: i64 = 0
+  let n = list.list_count(args)
+  while (i < n):
+    let item = list.list_get(args, i)
+    if (i == 0):
+      out = quote_arg(item)
+    else:
+      out = str.concat(out, str.concat(" ", quote_arg(item)))
+
+    i = i + 1
+
+  return out
+
+# fmt: run thagore-fmt on the current project
+
+pub func run_fmt() -> i32:
+  let fmt_bin = find_fmt_binary()
+  if (utils.is_empty(fmt_bin)):
+    out.print_error("thagore-fmt not found")
+    out.print_error("hint: install it with: drago install thagore-fmt")
+    return 1
+
+  let args = collect_forward_args()
+  let cmd = str.concat(quote_arg(fmt_bin), str.concat(" ", join_args(args)))
+  return process.run(cmd)

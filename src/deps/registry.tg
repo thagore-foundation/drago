@@ -2,14 +2,13 @@ import lib.fs as fs
 import lib.map as map
 import lib.path as path
 import lib.process as process
-import std.list as list
-import std.string as str
 import src.core.shell as shell
 import src.core.utils as utils
 import src.deps.downloader as downloader
 import src.project.lockfile as lockfile
 import src.project.manifest as manifest
-
+import std.list as list
+import std.string as str
 pub func info_make(found: i64, name: ptr, version: ptr, repo: ptr, checksum: ptr, tier: ptr) -> ptr:
   let out = str.from_int(found)
   out = str.concat(out, "|")
@@ -28,6 +27,7 @@ pub func info_part(info: ptr, idx: i64) -> ptr:
   let parts = str.split(info, "|")
   if (list.list_count(parts) <= idx):
     return str.concat("", "")
+
   return list.list_get(parts, idx)
 
 pub func info_found(info: ptr) -> ptr:
@@ -52,6 +52,7 @@ pub func registry_base() -> ptr:
   let base = process.env("DRAGO_REGISTRY_BASE")
   if (utils.is_empty(base)):
     return str.concat("https:", str.concat("/", "/raw.githubusercontent.com/thagore-foundation/registry/main"))
+
   return base
 
 pub func registry_url(file_name: ptr) -> ptr:
@@ -64,20 +65,24 @@ func is_file_url(url: ptr) -> bool:
 pub func fetch_url_text(url: ptr, offline_mode: i32) -> ptr:
   if (is_file_url(url)):
     return shell.fetch_text(url, 0)
+
   return shell.fetch_text(url, offline_mode)
 
 pub func value_after_colon(line: ptr) -> ptr:
   let parts = str.split(line, ":")
   if (map.map_is_null_ptr(parts) == 1):
     return str.concat("", "")
+
   let two: i64 = 2
   if (list.list_count(parts) < two):
     return str.concat("", "")
+
   return utils.strip_quotes(str.trim(list.list_get(parts, 1)))
 
 pub func parse_package_from_yaml(pkg: ptr, tier: ptr, yaml_text: ptr) -> ptr:
   if (map.map_is_null_ptr(yaml_text) == 1):
     return info_make(0, pkg, str.concat("", ""), str.concat("", ""), str.concat("", ""), tier)
+
   let lines = str.split(yaml_text, "\n")
   let i: i64 = 0
   let n = list.list_count(lines)
@@ -94,33 +99,45 @@ pub func parse_package_from_yaml(pkg: ptr, tier: ptr, yaml_text: ptr) -> ptr:
         if (utils.is_empty(raw)):
           j = j + 1
           continue
+
         if (utils.utils_starts_with(raw, "  ")):
           let t = str.trim(raw)
           if (utils.utils_starts_with(t, "version:")):
             version = value_after_colon(t)
+
           if (utils.utils_starts_with(t, "repo:")):
             repo = value_after_colon(t)
+
           if (utils.utils_starts_with(t, "checksum:")):
             checksum = value_after_colon(t)
+
           j = j + 1
           continue
+
         break
+
       if (utils.is_empty(repo)):
         repo = str.concat("thagore-foundation/", pkg)
+
       return info_make(1, pkg, version, repo, checksum, tier)
+
     i = i + 1
+
   return info_make(0, pkg, str.concat("", ""), str.concat("", ""), str.concat("", ""), tier)
 
 pub func find_package(pkg: ptr, offline_mode: i32) -> ptr:
   let auth = parse_package_from_yaml(pkg, "authentic", fetch_url_text(registry_url("authentic.yaml"), offline_mode))
   if (str.str_eq(info_found(auth), "1")):
     return auth
+
   let comm = parse_package_from_yaml(pkg, "community", fetch_url_text(registry_url("community.yaml"), offline_mode))
   if (str.str_eq(info_found(comm), "1")):
     return comm
+
   let pub = parse_package_from_yaml(pkg, "publish", fetch_url_text(registry_url("publish.yaml"), offline_mode))
   if (str.str_eq(info_found(pub), "1")):
     return pub
+
   return info_make(0, pkg, str.concat("", ""), str.concat("", ""), str.concat("", ""), "unregistered")
 
 pub func tier_warning(info: ptr):
@@ -128,6 +145,7 @@ pub func tier_warning(info: ptr):
   let name = info_name(info)
   if (str.str_eq(tier, "publish")):
     print(str.concat("⚠ package ", str.concat(name, " is in publish tier (pending review)")))
+
   if (str.str_eq(tier, "unregistered")):
     print(str.concat("⚠ package ", str.concat(name, " is unregistered")))
 
@@ -136,16 +154,21 @@ func external_source_id(source_kind: ptr, source_value: ptr, version: ptr) -> pt
     let out = str.concat(source_kind, str.concat(":", source_value))
     if (utils.is_empty(version) == false):
       out = str.concat(out, str.concat("::ref-", version))
+
     return out
+
   return str.concat(source_kind, str.concat(":", source_value))
 
 func accept_external_sources(accept_yes: i32) -> i32:
   if (accept_yes != 0):
     return 1
+
   if (str.str_eq(process.env("DRAGO_ACCEPT_RISK"), "1")):
     return 1
+
   if (str.str_eq(process.env("DRAGO_YES"), "1")):
     return 1
+
   return 0
 
 func warn_external_source(dep_name: ptr, source_kind: ptr, source_value: ptr) -> i32:
@@ -160,15 +183,19 @@ func registry_name_conflict(dep_name: ptr, offline_mode: i32) -> i32:
   let info = find_package(dep_name, offline_mode)
   if (str.str_eq(info_found(info), "1")):
     return 1
+
   return 0
 
 func resolve_path_source(project_root: ptr, source_value: ptr) -> ptr:
   if (utils.utils_starts_with(source_value, "/")):
     return source_value
+
   if (utils.utils_starts_with(source_value, "\\")):
     return source_value
+
   if (str.str_has(source_value, ":")):
     return source_value
+
   return path.join(project_root, source_value)
 
 func install_registry_dependency(project_root: ptr, pkg: ptr, requested_version: ptr, offline_mode: i32) -> i32:
@@ -182,6 +209,7 @@ func install_registry_dependency(project_root: ptr, pkg: ptr, requested_version:
       dep_version = requested_version
       if (utils.is_empty(dep_version)):
         dep_version = str.concat("", "main")
+
       dep_repo = pkg
       dep_checksum = str.concat("", "")
     else:
@@ -191,15 +219,19 @@ func install_registry_dependency(project_root: ptr, pkg: ptr, requested_version:
     tier_warning(info)
     if (utils.is_empty(requested_version) == false):
       dep_version = requested_version
+
   if (downloader.install_package(pkg, dep_version, dep_repo, dep_checksum, offline_mode) == 0):
     return 0
+
   if (lockfile.upsert(project_root, pkg, dep_version, dep_repo, dep_checksum) == 0):
     return 0
+
   return 1
 
 func install_external_dependency(project_root: ptr, dep_name: ptr, version: ptr, source_kind: ptr, source_value: ptr, offline_mode: i32, accept_yes: i32) -> i32:
   if (accept_external_sources(accept_yes) == 0):
     return warn_external_source(dep_name, source_kind, source_value)
+
   if (str.str_eq(source_kind, "git")):
     if (downloader.install_git_package(dep_name, version, source_value, offline_mode) == 0):
       return 0
@@ -207,11 +239,14 @@ func install_external_dependency(project_root: ptr, dep_name: ptr, version: ptr,
     let resolved_path = resolve_path_source(project_root, source_value)
     if (downloader.install_path_package(dep_name, version, resolved_path) == 0):
       return 0
+
   let lock_source = source_value
   if (str.str_eq(source_kind, "path")):
     lock_source = resolve_path_source(project_root, source_value)
+
   if (lockfile.upsert(project_root, dep_name, version, external_source_id(source_kind, lock_source, version), str.concat("", "")) == 0):
     return 0
+
   return 1
 
 func install_dependency_line(project_root: ptr, dep_line: ptr, offline_mode: i32, accept_yes: i32) -> i32:
@@ -221,6 +256,7 @@ func install_dependency_line(project_root: ptr, dep_line: ptr, offline_mode: i32
   let dep_version = manifest.dependency_version_value(dep_line)
   if (str.str_eq(source_kind, "registry")):
     return install_registry_dependency(project_root, dep_name, dep_version, offline_mode)
+
   return install_external_dependency(project_root, dep_name, dep_version, source_kind, source_value, offline_mode, accept_yes)
 
 pub func reg_add_dependency(project_root: ptr, pkg: ptr, requested_version: ptr, offline_mode: i32) -> i32:
@@ -228,6 +264,7 @@ pub func reg_add_dependency(project_root: ptr, pkg: ptr, requested_version: ptr,
   let install_rc = install_registry_dependency(project_root, pkg, requested_version, offline_mode)
   if (install_rc == 0):
     return 0
+
   let locked = lockfile.load_lines(project_root)
   let dep_version = requested_version
   let i: i64 = 0
@@ -239,10 +276,13 @@ pub func reg_add_dependency(project_root: ptr, pkg: ptr, requested_version: ptr,
       i = n
     else:
       i = i + 1
+
   if (utils.is_empty(dep_version) == false):
     dep_spec = manifest.registry_dep_spec(dep_version)
+
   if (manifest.add_dependency(project_root, pkg, dep_spec) == 0):
     return 0
+
   return 1
 
 pub func reg_add_external_dependency(project_root: ptr, dep_name: ptr, version: ptr, source_kind: ptr, source_value: ptr, offline_mode: i32, accept_yes: i32) -> i32:
@@ -250,6 +290,7 @@ pub func reg_add_external_dependency(project_root: ptr, dep_name: ptr, version: 
     print(str.concat("ERROR: external dependency name conflicts with registry package: ", dep_name))
     print("Use --alias <name> to choose a different import name.")
     return 0
+
   let resolved_version = version
   if (utils.is_empty(resolved_version)):
     if (str.str_eq(source_kind, "git")):
@@ -259,11 +300,14 @@ pub func reg_add_external_dependency(project_root: ptr, dep_name: ptr, version: 
       resolved_version = manifest.load_version(resolved_path)
       if (utils.is_empty(resolved_version)):
         resolved_version = str.concat("", "0.1.0")
+
   if (install_external_dependency(project_root, dep_name, resolved_version, source_kind, source_value, offline_mode, accept_yes) == 0):
     return 0
+
   let dep_spec = manifest.external_dep_spec(source_kind, resolved_version, source_value)
   if (manifest.add_dependency(project_root, dep_name, dep_spec) == 0):
     return 0
+
   return 1
 
 pub func reg_install_all(project_root: ptr, feature_csv: ptr, all_features: i32, no_default_features: i32, offline_mode: i32, accept_yes: i32) -> i32:
@@ -274,13 +318,16 @@ pub func reg_install_all(project_root: ptr, feature_csv: ptr, all_features: i32,
     let dep = list.list_get(dependencies, i)
     if (install_dependency_line(project_root, dep, offline_mode, accept_yes) == 0):
       return 0
+
     i = i + 1
+
   return 1
 
 pub func reg_update_all(project_root: ptr, feature_csv: ptr, all_features: i32, no_default_features: i32, only_dep: ptr, offline_mode: i32, accept_yes: i32) -> i32:
   let dependencies = manifest.load_dependencies_for_features(project_root, feature_csv, all_features, no_default_features)
   if (utils.is_empty(only_dep) == false):
     dependencies = manifest.load_dependencies(project_root)
+
   let matched = 0
   let i: i64 = 0
   let n = list.list_count(dependencies)
@@ -291,14 +338,19 @@ pub func reg_update_all(project_root: ptr, feature_csv: ptr, all_features: i32, 
       if (str.str_eq(name, only_dep) == false):
         i = i + 1
         continue
+
       matched = 1
+
     if (install_dependency_line(project_root, dep, offline_mode, accept_yes) == 0):
       return 0
+
     i = i + 1
+
   if (utils.is_empty(only_dep) == false):
     if (matched == 0):
       print(str.concat("ERROR: dependency not found for update: ", only_dep))
       return 0
+
   return 1
 
 func publish_get_remote_repo() -> ptr:
@@ -383,23 +435,28 @@ pub func reg_publish_project(project_root: ptr) -> i32:
   if (utils.is_empty(name)):
     print("ERROR: invalid drago.toml package name/version")
     return 0
+
   if (utils.is_empty(version)):
     print("ERROR: invalid drago.toml package name/version")
     return 0
+
   let repo = publish_get_remote_repo()
   if (utils.is_empty(repo)):
     print("ERROR: could not determine GitHub repo from git remote origin")
     return 0
+
   let desc_escaped = publish_escape_shell(description)
   let script = publish_script_body(name, version, repo, desc_escaped)
   let script_path = str.concat("/tmp/drago_publish_", str.concat(name, ".sh"))
   if (fs.write_file(script_path, script) == 0):
     print("ERROR: could not write publish script")
     return 0
+
   let rc = process.run(str.concat("sh ", script_path))
   fs.remove_path(script_path)
   if (rc != 0):
     return 0
+
   return 1
 
 pub func reg_audit_dependencies(project_root: ptr, offline_mode: i32) -> i32:
@@ -414,8 +471,11 @@ pub func reg_audit_dependencies(project_root: ptr, offline_mode: i32) -> i32:
     if (map.map_is_null_ptr(issues) == 1):
       i = i + 1
       continue
+
     if (str.str_has(issues, pkg_name)):
       print(str.concat("⚠ audit warning for package ", pkg_name))
       ok = 0
+
     i = i + 1
+
   return ok

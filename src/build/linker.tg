@@ -2,10 +2,9 @@ import lib.fs as fs
 import lib.map as map
 import lib.path as path
 import lib.process as process
-import std.string as str
 import src.cli.output as out
 import src.project.manifest as manifest
-
+import std.string as str
 pub func thagc_bin() -> ptr:
   let bin = process.env("THAGC")
   if (str.str_eq(bin, "") == false):
@@ -36,6 +35,7 @@ pub func thagc_bin() -> ptr:
   return str.concat("", "thagc")
 
 # Ensures the target directory exists.
+
 pub func ensure_target_dir(project_root: ptr) -> i32:
   let t = path.join(project_root, "target")
   return fs.mkdir(t)
@@ -47,12 +47,15 @@ pub func output_binary_path(project_root: ptr, project_name: ptr) -> ptr:
 pub func feature_cli_args(features: ptr, all_features: i32, no_default_features: i32) -> ptr:
   if (all_features != 0):
     return str.concat("", " --all-features")
+
   let out = str.concat("", "")
   if (no_default_features != 0):
     out = str.concat(out, " --no-default-features")
+
   let selected = str.trim(str.concat("", features))
   if (str.str_eq(selected, "")):
     return out
+
   out = str.concat(out, str.concat(" --features ", selected))
   return out
 
@@ -62,26 +65,33 @@ pub func link_project(project_root: ptr, target_triple: ptr, quiet: i32, feature
   if (ensure_target_dir(project_root) == 0):
     out.print_error("cannot create target directory")
     return 0
+
   let out_bin = output_binary_path(project_root, name)
   if (fs.exists(out_bin) != 0):
     fs.remove_path(out_bin)
+
   let entry = path.join(project_root, entry_rel)
   let cmd = str.concat(thagc_bin(), str.concat(" build ", str.concat(entry, str.concat(" -o ", out_bin))))
   cmd = str.concat(cmd, feature_cli_args(features, all_features, no_default_features))
   if (str.str_eq(target_triple, "") == false):
     cmd = str.concat(cmd, str.concat(" --target=", target_triple))
+
   let captured = process.capture(str.concat(cmd, " 2>&1"))
   if (fs.exists(out_bin) == 0):
     if (map.map_is_null_ptr(captured) == 1):
       out.print_error("thagc link/build failed")
     else:
       out.print_compiler_errors(captured)
+
     out.print_summary_fail("Build failed")
     return 0
+
   if (quiet == 0):
     if (map.map_is_null_ptr(captured) == 1):
       captured = str.concat("", "")
+
     captured = str.trim(captured)
     if (str.str_eq(captured, "") == false):
       print(captured)
+
   return 1

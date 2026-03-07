@@ -1,0 +1,6 @@
+style = "strict"
+max_line_length = 100
+indent_size = 2
+sort_imports = true
+blank_lines_between_decls = 1
+trailing_newline = true

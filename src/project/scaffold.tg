@@ -1,9 +1,8 @@
 import lib.fs as fs
 import lib.path as path
 import lib.process as process
-import std.string as str
 import src.core.utils as utils
-
+import std.string as str
 pub func create_project(name: ptr) -> i32:
   if (utils.is_empty(name)):
     print("ERROR: project name is required")
@@ -26,6 +25,7 @@ pub func create_project(name: ptr) -> i32:
   if (fs.mkdir(src_dir) == 0):
     print("ERROR: cannot create src/")
     return 0
+
   if (fs.mkdir(tests_dir) == 0):
     print("ERROR: cannot create tests/")
     return 0

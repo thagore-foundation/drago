@@ -2,24 +2,26 @@ import lib.fs as fs
 import lib.map as map
 import lib.path as path
 import lib.process as process
-import std.list as list
-import std.string as str
-import src.core.utils as utils
 import src.core.shell as shell
+import src.core.utils as utils
 import src.deps.cache as cache
 import src.project.manifest as manifest
-
+import std.list as list
+import std.string as str
 pub func download_archive(url: ptr, archive_path: ptr) -> i32:
   return shell.download(url, archive_path)
 
 pub func verify_checksum(archive_path: ptr, checksum: ptr) -> i32:
   if (utils.is_empty(checksum)):
     return 1
+
   let digest = shell.sha256(archive_path)
   if (utils.is_empty(digest)):
     return 0
+
   if (str.str_eq(digest, shell.lower_hex(str.trim(checksum)))):
     return 1
+
   return 0
 
 pub func extract_archive(archive_path: ptr, out_dir: ptr) -> i32:
@@ -29,23 +31,30 @@ func valid_runtime_asset_dir(asset_dir: ptr) -> i32:
   let dir = str.trim(asset_dir)
   if (utils.is_empty(dir)):
     return 0
+
   if (utils.utils_starts_with(dir, "/")):
     return 0
+
   if (utils.utils_starts_with(dir, "\\")):
     return 0
+
   if (str.str_has(dir, ":")):
     return 0
+
   if (str.str_has(dir, "..")):
     return 0
+
   return 1
 
 func sync_runtime_asset_dir(name: ptr, version: ptr, source_dir: ptr, asset_dir: ptr) -> i32:
   if (valid_runtime_asset_dir(asset_dir) == 0):
     print(str.concat("WARNING: skipped unsafe runtime asset dir: ", asset_dir))
     return 1
+
   let src_asset = path.join(source_dir, asset_dir)
   if (str.str_eq(str.from_int(fs.exists(src_asset)), "0")):
     return 1
+
   let runtime_root = cache.runtime_package_dir(name, version)
   fs.mkdir(path.join(cache.runtimes_root(), name))
   fs.mkdir(runtime_root)
@@ -53,19 +62,23 @@ func sync_runtime_asset_dir(name: ptr, version: ptr, source_dir: ptr, asset_dir:
   if (shell.copy_dir(src_asset, dest_asset) != 0):
     print(str.concat("ERROR: runtime asset copy failed for ", src_asset))
     return 0
+
   return 1
 
 func sync_runtime_assets(name: ptr, version: ptr, source_dir: ptr) -> i32:
   let runtime_root = cache.runtime_package_dir(name, version)
   if (str.str_eq(str.from_int(fs.exists(runtime_root)), "1")):
     fs.remove_path(runtime_root)
+
   let runtime_dirs = manifest.package_runtime_dirs(source_dir)
   let i: i64 = 0
   let n = list.list_count(runtime_dirs)
   while (i < n):
     if (sync_runtime_asset_dir(name, version, source_dir, list.list_get(runtime_dirs, i)) == 0):
       return 0
+
     i = i + 1
+
   return 1
 
 pub func package_tarball_url(repo: ptr, version: ptr) -> ptr:
@@ -81,6 +94,7 @@ pub func install_package(name: ptr, version: ptr, repo: ptr, checksum: ptr, offl
   if (str.str_eq(str.from_int(cache.ensure_layout()), "0")):
     print("ERROR: cannot prepare cache directories")
     return 0
+
   let target_dir = cache.package_dir(name, version)
   fs.mkdir(path.join(cache.packages_root(), name))
   if (str.str_eq(str.from_int(fs.exists(target_dir)), "1")):
@@ -90,6 +104,7 @@ pub func install_package(name: ptr, version: ptr, repo: ptr, checksum: ptr, offl
   let offline_enabled = offline_mode
   if (str.str_eq(offline, "1")):
     offline_enabled = 1
+
   if (offline_enabled != 0):
     print(str.concat("ERROR: package missing in offline mode: ", str.concat(name, str.concat("@", version))))
     return 0
@@ -110,52 +125,66 @@ pub func install_package(name: ptr, version: ptr, repo: ptr, checksum: ptr, offl
     else:
       print(str.concat("ERROR: download failed for package ", name))
       return 0
+
   if (str.str_eq(str.from_int(verify_checksum(archive_path, checksum)), "0")):
     print(str.concat("ERROR: checksum verification failed for ", archive_name))
     return 0
+
   if (str.str_eq(str.from_int(extract_archive(archive_path, target_dir)), "0")):
     print(str.concat("ERROR: extract failed for ", archive_name))
     return 0
+
   if (sync_runtime_assets(name, version, target_dir) == 0):
     return 0
+
   return 1
 
 pub func install_git_package(name: ptr, version: ptr, repo: ptr, offline_mode: i32) -> i32:
   if (str.str_eq(str.from_int(cache.ensure_layout()), "0")):
     print("ERROR: cannot prepare cache directories")
     return 0
+
   let target_dir = cache.package_dir(name, version)
   fs.mkdir(path.join(cache.packages_root(), name))
   let offline = process.env("DRAGO_OFFLINE")
   let offline_enabled = offline_mode
   if (str.str_eq(offline, "1")):
     offline_enabled = 1
+
   if (offline_enabled != 0):
     print(str.concat("ERROR: package missing in offline mode: ", str.concat(name, str.concat("@", version))))
     return 0
+
   if (str.str_eq(str.from_int(fs.exists(target_dir)), "1")):
     fs.remove_path(target_dir)
+
   if (shell.clone_git(repo, version, target_dir) != 0):
     print(str.concat("ERROR: git clone failed for ", repo))
     return 0
+
   if (sync_runtime_assets(name, version, target_dir) == 0):
     return 0
+
   return 1
 
 pub func install_path_package(name: ptr, version: ptr, src_dir: ptr) -> i32:
   if (str.str_eq(str.from_int(cache.ensure_layout()), "0")):
     print("ERROR: cannot prepare cache directories")
     return 0
+
   let target_dir = cache.package_dir(name, version)
   fs.mkdir(path.join(cache.packages_root(), name))
   if (str.str_eq(str.from_int(fs.exists(src_dir)), "0")):
     print(str.concat("ERROR: path source not found: ", src_dir))
     return 0
+
   if (shell.copy_dir(src_dir, target_dir) != 0):
     print(str.concat("ERROR: copy failed for ", src_dir))
     return 0
+
   if (sync_runtime_assets(name, version, target_dir) == 0):
     return 0
+
   return 1
 
 pub func checksum_of_file(file_path: ptr) -> ptr:
@@ -163,7 +192,9 @@ pub func checksum_of_file(file_path: ptr) -> ptr:
   let out = process.capture(cmd)
   if (map.map_is_null_ptr(out) == 1):
     return str.concat("", "")
+
   let first = str.split(out, " ")
   if (map.map_is_null_ptr(first) == 1):
     return str.concat("", "")
+
   return list.list_get(first, 0)

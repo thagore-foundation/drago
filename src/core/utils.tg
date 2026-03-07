@@ -1,6 +1,5 @@
 import std.list as list
 import std.string as str
-
 pub func is_empty(s: ptr) -> bool:
   let value = str.concat("", s)
   let zero: i64 = 0
@@ -12,10 +11,12 @@ pub func utils_starts_with(text: ptr, prefix: ptr) -> bool:
   let n = str.slen(p)
   if (str.slen(h) < n):
     return false
+
   let left = str.substr(h, 0, n)
   let eq = str.str_eq(left, p)
   if (eq):
     return true
+
   return false
 
 pub func ends_with(text: ptr, suffix: ptr) -> bool:
@@ -25,10 +26,12 @@ pub func ends_with(text: ptr, suffix: ptr) -> bool:
   let m = str.slen(h)
   if (m < n):
     return false
+
   let right = str.substr(h, m - n, n)
   let eq = str.str_eq(right, s)
   if (eq):
     return true
+
   return false
 
 pub func strip_quotes(text: ptr) -> ptr:
@@ -41,18 +44,21 @@ pub func utils_contains(text: ptr, part: ptr) -> bool:
   let rc = str.str_has(str.concat("", text), str.concat("", part))
   if (rc):
     return true
+
   return false
 
 pub func is_zero(v: i64) -> bool:
   let zero = v - v
   if (v == zero):
     return true
+
   return false
 
 pub func non_zero(v: i64) -> bool:
   let zero = v - v
   if (v == zero):
     return false
+
   return true
 
 pub func is_valid_package_name(name: ptr) -> bool:
@@ -61,16 +67,22 @@ pub func is_valid_package_name(name: ptr) -> bool:
   let max_len: i64 = 64
   if (str.slen(s) == zero):
     return false
+
   if (str.slen(s) > max_len):
     return false
+
   if (str.str_has(s, ".")):
     return false
+
   if (str.str_has(s, " ")):
     return false
+
   if (str.str_has(s, "/")):
     return false
+
   if (str.str_has(s, "\\")):
     return false
+
   return true
 
 pub func source_leaf_name(text: ptr) -> ptr:
@@ -78,5 +90,6 @@ pub func source_leaf_name(text: ptr) -> ptr:
   let n: i64 = list.list_count(parts)
   if (n == 0):
     return str.concat("", "")
+
   let leaf = str.trim(list.list_get(parts, n - 1))
   return str.replace(leaf, ".git", "")

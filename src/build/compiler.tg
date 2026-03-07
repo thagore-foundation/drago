@@ -1,24 +1,28 @@
 import lib.process as process
-import std.list as list
-import std.string as str
 import src.build.linker as linker
 import src.cli.output as out
+import std.list as list
+import std.string as str
 
 # Returns the minimum supported compiler version.
 func minimum_thagc_version() -> ptr:
   return str.concat("", "0.9.0")
 
 # Detects whether the host is Windows.
+
 func is_windows() -> bool:
   return str.str_eq(process.env("OS"), "Windows_NT")
 
 # Redirects stderr away from the user-facing build output.
+
 func stderr_quiet_redirect() -> ptr:
   if (is_windows()):
     return str.concat("", " 2>NUL")
+
   return str.concat("", " 2>/dev/null")
 
 # Extracts a JSON string field from a flat object.
+
 func json_string_field(raw: ptr, key: ptr) -> ptr:
   let entries = str.split(str.trim(raw), ",")
   let i: i64 = 0
@@ -38,21 +42,28 @@ func json_string_field(raw: ptr, key: ptr) -> ptr:
           while (j < m):
             value = str.concat(value, str.concat(":", list.list_get(parts, j)))
             j = j + 1
+
           let value_len = str.slen(value)
           if (value_len >= 2):
             return str.substr(value, 1, value_len - 2)
+
           return str.concat("", "")
+
     i = i + 1
+
   return str.concat("", "")
 
 # Parses one semantic-version component.
+
 func version_component(version_text: ptr, index: i64) -> i64:
   let parts = str.split(version_text, ".")
   if (list.list_count(parts) <= index):
     return 0
+
   return str.to_int(str.trim(list.list_get(parts, index)))
 
 # Returns true when the found version satisfies the minimum.
+
 func version_at_least(found: ptr, minimum: ptr) -> i32:
   let found_major = version_component(found, 0)
   let found_minor = version_component(found, 1)
@@ -62,48 +73,62 @@ func version_at_least(found: ptr, minimum: ptr) -> i32:
   let min_patch = version_component(minimum, 2)
   if (found_major > min_major):
     return 1
+
   if (found_major < min_major):
     return 0
+
   if (found_minor > min_minor):
     return 1
+
   if (found_minor < min_minor):
     return 0
+
   if (found_patch < min_patch):
     return 0
+
   return 1
 
 # Returns the raw `thagc --version` JSON payload.
+
 func thagc_version_payload() -> ptr:
   let cmd = str.concat(linker.thagc_bin(), " --version")
   return str.trim(process.capture(str.concat(cmd, stderr_quiet_redirect())))
 
 # Returns the compiler version string.
+
 pub func thagc_version() -> ptr:
   return json_string_field(thagc_version_payload(), "thagc")
 
 # Ensures the compiler binary is present and new enough.
+
 pub func ensure_thagc() -> i32:
   let version = thagc_version()
   if (str.str_eq(version, "")):
     out.print_error("thagc not found")
     print("install via: curl -fsSL https://thagore.org/install | sh")
     return 0
+
   if (version_at_least(version, minimum_thagc_version()) == 0):
     out.print_error(str.concat("thagc ", str.concat(version, str.concat(" found, but drago 1.0.6 requires thagc ", str.concat(minimum_thagc_version(), "+")))))
     print("run: drago update thagc")
     return 0
+
   return 1
 
 # Returns the active build flags.
+
 pub func build_flags() -> ptr:
   return str.concat("", "-O2")
 
 # Returns the effective target triple.
+
 pub func target_triple() -> ptr:
   return process.env("DRAGO_TARGET")
 
 # Builds the project through the active thagc linker path.
+
 pub func build_project(project_root: ptr, quiet: i32, features: ptr, all_features: i32, no_default_features: i32) -> i32:
   if (ensure_thagc() == 0):
     return 0
+
   return linker.link_project(project_root, target_triple(), quiet, features, all_features, no_default_features)
