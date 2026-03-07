@@ -32,8 +32,6 @@ pub func command_from_text(raw: ptr) -> ptr:
     return str.concat("", "publish")
   if (str.str_eq(raw, "fmt")):
     return str.concat("", "fmt")
-  if (str.str_eq(raw, "doctor")):
-    return str.concat("", "doctor")
   if (str.str_eq(raw, "check")):
     return str.concat("", "check")
   if (str.str_eq(raw, "cache")):

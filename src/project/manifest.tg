@@ -108,26 +108,6 @@ pub func load_license(project_root: ptr) -> ptr:
 pub func default_opt_level() -> ptr:
   return str.concat("", "2")
 
-# Returns the default build output path.
-pub func default_build_output() -> ptr:
-  return str.concat("", "")
-
-# Returns the default build optimization level.
-pub func default_build_opt() -> ptr:
-  return str.concat("", "O2")
-
-# Returns the default build debug flag.
-pub func default_build_debug() -> i32:
-  return 0
-
-# Returns the default build target triple.
-pub func default_build_target() -> ptr:
-  return str.concat("", "")
-
-# Returns the default build extra flags list.
-pub func default_build_extra_flags() -> ptr:
-  return list.list_new()
-
 pub func load_opt_level(project_root: ptr) -> ptr:
   let h = parse_handle(project_root)
   if (map.map_is_null_ptr(h) == 1):
@@ -145,114 +125,6 @@ pub func load_opt_level(project_root: ptr) -> ptr:
     return default_opt_level()
   toml.toml_free(h)
   return out
-
-# Loads the [build].entry value with package entry fallback.
-pub func load_build_entry(project_root: ptr) -> ptr:
-  let h = parse_handle(project_root)
-  if (map.map_is_null_ptr(h) == 1):
-    return load_entry(project_root)
-  let build_sec = toml.toml_get_section(h, "build")
-  if (map.map_is_null_ptr(build_sec) == 1):
-    toml.toml_free(h)
-    return load_entry(project_root)
-  let out = toml.toml_get_str(build_sec, "entry")
-  if (map.map_is_null_ptr(out) == 1):
-    toml.toml_free(h)
-    return load_entry(project_root)
-  if (utils.is_empty(out)):
-    toml.toml_free(h)
-    return load_entry(project_root)
-  toml.toml_free(h)
-  return out
-
-# Loads the [build].output value with empty default.
-pub func load_build_output(project_root: ptr) -> ptr:
-  let h = parse_handle(project_root)
-  if (map.map_is_null_ptr(h) == 1):
-    return default_build_output()
-  let build_sec = toml.toml_get_section(h, "build")
-  if (map.map_is_null_ptr(build_sec) == 1):
-    toml.toml_free(h)
-    return default_build_output()
-  let out = toml.toml_get_str(build_sec, "output")
-  if (map.map_is_null_ptr(out) == 1):
-    toml.toml_free(h)
-    return default_build_output()
-  toml.toml_free(h)
-  return str.trim(out)
-
-# Loads the [build].opt value with compatibility fallback.
-pub func load_build_opt(project_root: ptr) -> ptr:
-  let h = parse_handle(project_root)
-  if (map.map_is_null_ptr(h) == 1):
-    let legacy = load_opt_level(project_root)
-    if (str.str_eq(legacy, "0")):
-      return str.concat("", "O0")
-    if (str.str_eq(legacy, "1")):
-      return str.concat("", "O1")
-    if (str.str_eq(legacy, "3")):
-      return str.concat("", "O3")
-    return default_build_opt()
-  let build_sec = toml.toml_get_section(h, "build")
-  if (map.map_is_null_ptr(build_sec) == 1):
-    toml.toml_free(h)
-    let legacy = load_opt_level(project_root)
-    if (str.str_eq(legacy, "0")):
-      return str.concat("", "O0")
-    if (str.str_eq(legacy, "1")):
-      return str.concat("", "O1")
-    if (str.str_eq(legacy, "3")):
-      return str.concat("", "O3")
-    return default_build_opt()
-  let out = toml.toml_get_str(build_sec, "opt")
-  if (map.map_is_null_ptr(out) == 1):
-    toml.toml_free(h)
-    let legacy = load_opt_level(project_root)
-    if (str.str_eq(legacy, "0")):
-      return str.concat("", "O0")
-    if (str.str_eq(legacy, "1")):
-      return str.concat("", "O1")
-    if (str.str_eq(legacy, "3")):
-      return str.concat("", "O3")
-    return default_build_opt()
-  if (utils.is_empty(out)):
-    toml.toml_free(h)
-    return default_build_opt()
-  toml.toml_free(h)
-  return str.trim(out)
-
-# Loads the [build].debug value as an integer flag.
-pub func load_build_debug(project_root: ptr) -> i32:
-  let raw = read_build_value(project_root, "debug")
-  let value = str.trim(raw)
-  if (str.str_eq(value, "true")):
-    return 1
-  if (str.str_eq(value, "1")):
-    return 1
-  return default_build_debug()
-
-# Loads the [build].target value with empty default.
-pub func load_build_target(project_root: ptr) -> ptr:
-  let h = parse_handle(project_root)
-  if (map.map_is_null_ptr(h) == 1):
-    return default_build_target()
-  let build_sec = toml.toml_get_section(h, "build")
-  if (map.map_is_null_ptr(build_sec) == 1):
-    toml.toml_free(h)
-    return default_build_target()
-  let out = toml.toml_get_str(build_sec, "target")
-  if (map.map_is_null_ptr(out) == 1):
-    toml.toml_free(h)
-    return default_build_target()
-  toml.toml_free(h)
-  return str.trim(out)
-
-# Loads the [build].extra_flags array.
-pub func load_build_extra_flags(project_root: ptr) -> ptr:
-  let raw = read_build_value(project_root, "extra_flags")
-  if (utils.is_empty(raw)):
-    return default_build_extra_flags()
-  return parse_array_values(raw)
 
 pub func load_authors(project_root: ptr) -> ptr:
   let h = parse_handle(project_root)
@@ -425,56 +297,6 @@ func parse_array_values(raw_value: ptr) -> ptr:
       list.list_append(out, item)
     i = i + 1
   return out
-
-# Reads a raw key value from the [build] section.
-func read_build_value(project_root: ptr, wanted_key: ptr) -> ptr:
-  let p = manifest_path(project_root)
-  if (fs.exists(p) == 0):
-    return str.concat("", "")
-  let raw = fs.read_file(p)
-  if (map.map_is_null_ptr(raw) == 1):
-    return str.concat("", "")
-  let lines = str.split(raw, "\n")
-  if (map.map_is_null_ptr(lines) == 1):
-    return str.concat("", "")
-
-  let in_build = 0
-  let collecting = 0
-  let buffer = str.concat("", "")
-  let i: i64 = 0
-  let n = list.list_count(lines)
-  while (i < n):
-    let line = line_without_comment(list.list_get(lines, i))
-    if (utils.is_empty(line)):
-      i = i + 1
-      continue
-    if (collecting != 0):
-      buffer = str.concat(buffer, line)
-      if (str.str_has(line, "]")):
-        return str.trim(buffer)
-      i = i + 1
-      continue
-    if (str.str_starts(line, "[")):
-      if (str.str_eq(line, "[build]")):
-        in_build = 1
-      else:
-        in_build = 0
-      i = i + 1
-      continue
-    if (in_build == 0):
-      i = i + 1
-      continue
-    let key = kv_key(line)
-    if (str.str_eq(key, wanted_key) == false):
-      i = i + 1
-      continue
-    buffer = kv_value(line)
-    if (str.str_has(buffer, "[") and (str.str_has(buffer, "]") == false)):
-      collecting = 1
-      i = i + 1
-      continue
-    return str.trim(buffer)
-  return str.concat("", "")
 
 func list_contains(items: ptr, value: ptr) -> i32:
   let i: i64 = 0
@@ -768,14 +590,6 @@ func feature_names(features: ptr) -> ptr:
         list_append_unique(out, key)
     i = i + 1
   return out
-
-# Loads manifest feature names as a list.
-pub func load_feature_names(project_root: ptr) -> ptr:
-  return feature_names(collect_feature_lines(project_root))
-
-# Loads the raw CSV items for one feature.
-pub func load_feature_items_csv(project_root: ptr, feature_name: ptr) -> ptr:
-  return feature_items_csv(collect_feature_lines(project_root), feature_name)
 
 func dep_feature_target(item: ptr) -> ptr:
   let token = str.trim(item)

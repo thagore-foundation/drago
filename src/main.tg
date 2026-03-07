@@ -10,7 +10,6 @@ import src.build.linker as linker
 import src.build.runner as runner
 import src.cli.output as out
 import src.cli.parser as parser
-import src.core.doctor as doctor
 import src.core.utils as utils
 import src.deps.cache as cache
 import src.deps.registry as registry
@@ -41,7 +40,6 @@ func usage():
   print("  update thagc                             self-update thagc only")
   print("  publish")
   print("  fmt")
-  print("  doctor")
   print("  check")
   print("  cache <list|size|clean|purge|purge-unused>")
   print("  audit")
@@ -677,33 +675,33 @@ func handle_cache(sub: ptr, quiet: i32) -> bool:
   out.print_error("cache subcommand required: list|size|clean|purge|purge-unused")
   return false
 
-func handle_build_single(root: ptr, quiet: i32, verbose: i32, features: ptr, all_features: i32, no_default_features: i32) -> bool:
+func handle_build_single(root: ptr, quiet: i32, features: ptr, all_features: i32, no_default_features: i32) -> bool:
   let name = project_name(root)
   let version = project_version(root)
   out.print_action("🔨", str.concat("Building ", str.concat(name, str.concat(" v", version))), quiet)
   let started = time.now_ms()
-  out.print_progress_start(manifest.load_build_entry(root), "compiling...", quiet)
+  out.print_progress_start("src/main.tg", "compiling...", quiet)
   let conflict_rc = resolver.detect_version_conflicts(root)
   if (conflict_rc == 0):
     out.print_summary_fail("Build failed")
     return false
-  let build_rc = compiler.build_project(root, quiet, verbose, features, all_features, no_default_features)
+  let build_rc = compiler.build_project(root, quiet, features, all_features, no_default_features)
   if (build_rc == 0):
     return false
   let elapsed = time.now_ms() - started
   let bin = linker.output_binary_path(root, name)
   let size = fs.filesize(bin)
-  out.print_progress_finish(manifest.load_build_entry(root), out.format_ms(elapsed), quiet)
+  out.print_progress_finish("src/main.tg", out.format_ms(elapsed), quiet)
   out.print_progress_start("linking...", "", quiet)
   out.print_progress_finish("linked", "", quiet)
   print("")
-  let rel_bin = linker.output_binary_path(root, name)
+  let rel_bin = str.concat("target/", str.concat(name, ".bin"))
   let tail = str.concat(" (", str.concat(out.format_bytes(size), str.concat(", ", str.concat(out.format_seconds_tenth(elapsed), ")"))))
   let summary = str.concat("Built ", str.concat(name, str.concat(" → ", str.concat(rel_bin, tail))))
   out.print_summary_ok(summary, quiet)
   return true
 
-func handle_build(root: ptr, quiet: i32, verbose: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32) -> bool:
+func handle_build(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32) -> bool:
   let members = selected_member_roots(root, quiet, package_name)
   let n = list.list_count(members)
   if (n == 0):
@@ -712,12 +710,12 @@ func handle_build(root: ptr, quiet: i32, verbose: i32, package_name: ptr, featur
     out.print_action("🧩", str.concat("Building workspace (", str.concat(str.from_int(n), " members)")), quiet)
   let i: i64 = 0
   while (i < n):
-    if (handle_build_single(list.list_get(members, i), quiet, verbose, features, all_features, no_default_features) == false):
+    if (handle_build_single(list.list_get(members, i), quiet, features, all_features, no_default_features) == false):
       return false
     i = i + 1
   return true
 
-func handle_run(root: ptr, quiet: i32, verbose: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32) -> bool:
+func handle_run(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32) -> bool:
   let members = selected_member_roots(root, quiet, package_name)
   let n = list.list_count(members)
   if (n == 0):
@@ -727,7 +725,7 @@ func handle_run(root: ptr, quiet: i32, verbose: i32, package_name: ptr, features
     return false
   if (utils.is_empty(package_name) == false):
     let run_root = list.list_get(members, 0)
-    let build_ok = handle_build_single(run_root, quiet, verbose, features, all_features, no_default_features)
+    let build_ok = handle_build_single(run_root, quiet, features, all_features, no_default_features)
     if (build_ok == false):
       return false
     print("")
@@ -742,7 +740,7 @@ func handle_run(root: ptr, quiet: i32, verbose: i32, package_name: ptr, features
     out.print_error("run in workspace root is ambiguous; run inside a member package")
     return false
   let run_root = list.list_get(members, 0)
-  let build_ok = handle_build_single(run_root, quiet, verbose, features, all_features, no_default_features)
+  let build_ok = handle_build_single(run_root, quiet, features, all_features, no_default_features)
   if (build_ok == false):
     return false
   print("")
@@ -875,23 +873,45 @@ func handle_update(root: ptr, dep_name: ptr, quiet: i32, package_name: ptr, feat
   return true
 
 func handle_fmt(root: ptr, quiet: i32) -> bool:
-  let rc = compiler.check_project(root, quiet, 0, "", 0, 0)
-  if (rc == 0):
-    out.print_error("fmt/check pipeline failed")
+  let cmd = str.concat(linker.thagc_bin(), str.concat(" fix doctor ", path.join(root, "src/main.tg")))
+  let rc = process.run(cmd)
+  if (rc != 0):
+    out.print_error("fmt/check pipeline failed (using thagc fix doctor fallback)")
     return false
   out.print_success("Format check completed", quiet)
   return true
 
-func handle_check_single(root: ptr, quiet: i32, verbose: i32, features: ptr, all_features: i32, no_default_features: i32) -> bool:
+func handle_check_single(root: ptr, quiet: i32, features: ptr, all_features: i32, no_default_features: i32) -> bool:
   out.print_action("🔨", str.concat("Checking ", str.concat(project_name(root), str.concat(" v", project_version(root)))), quiet)
+  let entry = path.join(root, manifest.load_entry(root))
   let started = time.now_ms()
-  let ok = compiler.check_project(root, quiet, verbose, features, all_features, no_default_features)
-  if (ok == 0):
+  let target_dir = path.join(root, "target")
+  if (fs.mkdir(target_dir) == 0):
+    if (fs.exists(target_dir) == 0):
+      out.print_error(str.concat("cannot create target directory: ", target_dir))
+      return false
+  let out_file = path.join(target_dir, "check.bin")
+  let out_file_ll = str.concat(out_file, ".ll")
+  if (fs.exists(out_file) != 0):
+    fs.remove_path(out_file)
+  if (fs.exists(out_file_ll) != 0):
+    fs.remove_path(out_file_ll)
+  let cmd = str.concat(linker.thagc_bin(), str.concat(" build ", str.concat(entry, str.concat(" --emit-llvm -o ", out_file))))
+  let feature_args = linker.feature_cli_args(features, all_features, no_default_features)
+  if (str.str_eq(feature_args, "") == false):
+    cmd = str.concat(cmd, feature_args)
+  let captured = process.capture(str.concat(cmd, " 2>&1"))
+  if (fs.exists(out_file) == 0):
+    if (fs.exists(out_file_ll) != 0):
+      out.print_summary_ok(str.concat("Typecheck/build check passed ", out.format_ms(time.now_ms() - started)), quiet)
+      return true
+    out.print_compiler_errors(captured)
+    out.print_summary_fail("Check failed")
     return false
   out.print_summary_ok(str.concat("Typecheck/build check passed ", out.format_ms(time.now_ms() - started)), quiet)
   return true
 
-func handle_check(root: ptr, quiet: i32, verbose: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32) -> bool:
+func handle_check(root: ptr, quiet: i32, package_name: ptr, features: ptr, all_features: i32, no_default_features: i32) -> bool:
   let members = selected_member_roots(root, quiet, package_name)
   let n = list.list_count(members)
   if (n == 0):
@@ -900,7 +920,7 @@ func handle_check(root: ptr, quiet: i32, verbose: i32, package_name: ptr, featur
     out.print_action("🧩", str.concat("Checking workspace (", str.concat(str.from_int(n), " members)")), quiet)
   let i: i64 = 0
   while (i < n):
-    if (handle_check_single(list.list_get(members, i), quiet, verbose, features, all_features, no_default_features) == false):
+    if (handle_check_single(list.list_get(members, i), quiet, features, all_features, no_default_features) == false):
       return false
     i = i + 1
   return true
@@ -982,14 +1002,7 @@ func main() -> i32:
     usage()
     return 0
   if (str.str_eq(cmd, "version")):
-    print(str.concat("drago  ", drago_version()))
-    let compiler_version = compiler.thagc_version()
-    let llvm_version = compiler.thagc_llvm_version()
-    let compiler_host = compiler.thagc_host()
-    if (str.str_eq(compiler_version, "")):
-      print("thagc  unavailable")
-    else:
-      print(str.concat("thagc  ", str.concat(compiler_version, str.concat("  (LLVM ", str.concat(llvm_version, str.concat(", ", str.concat(compiler_host, ")")))))))
+    print(str.concat("drago ", drago_version()))
     return 0
   if (str.str_eq(cmd, "new")):
     if (scaffold.create_project(arg1) != 0):
@@ -1006,11 +1019,11 @@ func main() -> i32:
       return 0
     return 1
   if (str.str_eq(cmd, "build")):
-    if (handle_build(root, quiet, verbose, package_name, features, all_features, no_default_features)):
+    if (handle_build(root, quiet, package_name, features, all_features, no_default_features)):
       return 0
     return 1
   if (str.str_eq(cmd, "run")):
-    if (handle_run(root, quiet, verbose, package_name, features, all_features, no_default_features)):
+    if (handle_run(root, quiet, package_name, features, all_features, no_default_features)):
       return 0
     return 1
   if (str.str_eq(cmd, "test")):
@@ -1049,12 +1062,8 @@ func main() -> i32:
     if (handle_fmt(root, quiet)):
       return 0
     return 1
-  if (str.str_eq(cmd, "doctor")):
-    if (doctor.run() != 0):
-      return 0
-    return 1
   if (str.str_eq(cmd, "check")):
-    if (handle_check(root, quiet, verbose, package_name, features, all_features, no_default_features)):
+    if (handle_check(root, quiet, package_name, features, all_features, no_default_features)):
       return 0
     return 1
   if (str.str_eq(cmd, "cache")):
