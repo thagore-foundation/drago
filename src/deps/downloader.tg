@@ -24,6 +24,31 @@ pub func verify_checksum(archive_path: ptr, checksum: ptr) -> i32:
 pub func extract_archive(archive_path: ptr, out_dir: ptr) -> i32:
   return shell.untar(archive_path, out_dir)
 
+func sync_runtime_asset_dir(name: ptr, version: ptr, source_dir: ptr, asset_dir: ptr) -> i32:
+  let src_asset = path.join(source_dir, asset_dir)
+  if (str.str_eq(str.from_int(fs.exists(src_asset)), "0")):
+    return 1
+  let runtime_root = cache.runtime_package_dir(name, version)
+  fs.mkdir(path.join(cache.runtimes_root(), name))
+  fs.mkdir(runtime_root)
+  let dest_asset = cache.runtime_asset_dir(name, version, asset_dir)
+  if (shell.copy_dir(src_asset, dest_asset) != 0):
+    print(str.concat("ERROR: runtime asset copy failed for ", src_asset))
+    return 0
+  return 1
+
+func sync_runtime_assets(name: ptr, version: ptr, source_dir: ptr) -> i32:
+  let runtime_root = cache.runtime_package_dir(name, version)
+  if (str.str_eq(str.from_int(fs.exists(runtime_root)), "1")):
+    fs.remove_path(runtime_root)
+  if (sync_runtime_asset_dir(name, version, source_dir, "bin") == 0):
+    return 0
+  if (sync_runtime_asset_dir(name, version, source_dir, "runtime") == 0):
+    return 0
+  if (sync_runtime_asset_dir(name, version, source_dir, "native") == 0):
+    return 0
+  return 1
+
 pub func package_tarball_url(repo: ptr, version: ptr) -> ptr:
   let v_prefixed = str.concat("v", version)
   let base = str.concat("https:", str.concat("/", "/github.com/"))
@@ -72,6 +97,8 @@ pub func install_package(name: ptr, version: ptr, repo: ptr, checksum: ptr, offl
   if (str.str_eq(str.from_int(extract_archive(archive_path, target_dir)), "0")):
     print(str.concat("ERROR: extract failed for ", archive_name))
     return 0
+  if (sync_runtime_assets(name, version, target_dir) == 0):
+    return 0
   return 1
 
 pub func install_git_package(name: ptr, version: ptr, repo: ptr, offline_mode: i32) -> i32:
@@ -92,6 +119,8 @@ pub func install_git_package(name: ptr, version: ptr, repo: ptr, offline_mode: i
   if (shell.clone_git(repo, version, target_dir) != 0):
     print(str.concat("ERROR: git clone failed for ", repo))
     return 0
+  if (sync_runtime_assets(name, version, target_dir) == 0):
+    return 0
   return 1
 
 pub func install_path_package(name: ptr, version: ptr, src_dir: ptr) -> i32:
@@ -105,6 +134,8 @@ pub func install_path_package(name: ptr, version: ptr, src_dir: ptr) -> i32:
     return 0
   if (shell.copy_dir(src_dir, target_dir) != 0):
     print(str.concat("ERROR: copy failed for ", src_dir))
+    return 0
+  if (sync_runtime_assets(name, version, target_dir) == 0):
     return 0
   return 1
 

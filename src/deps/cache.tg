@@ -24,6 +24,9 @@ pub func packages_root() -> ptr:
 pub func compiled_root() -> ptr:
   return path.join(thagore_root(), "compiled")
 
+pub func runtimes_root() -> ptr:
+  return path.join(thagore_root(), "runtimes")
+
 pub func ensure_layout() -> i32:
   let mk_root = fs.mkdir(thagore_root())
   if (mk_root == 0):
@@ -37,10 +40,19 @@ pub func ensure_layout() -> i32:
   let mk_compiled = fs.mkdir(compiled_root())
   if (mk_compiled == 0):
     return 0
+  let mk_runtimes = fs.mkdir(runtimes_root())
+  if (mk_runtimes == 0):
+    return 0
   return 1
 
 pub func package_dir(name: ptr, version: ptr) -> ptr:
   return path.join(path.join(packages_root(), name), version)
+
+pub func runtime_package_dir(name: ptr, version: ptr) -> ptr:
+  return path.join(path.join(runtimes_root(), name), version)
+
+pub func runtime_asset_dir(name: ptr, version: ptr, asset_dir: ptr) -> ptr:
+  return path.join(runtime_package_dir(name, version), asset_dir)
 
 pub func compiled_target_dir(name: ptr, version: ptr, target: ptr) -> ptr:
   return path.join(path.join(path.join(compiled_root(), name), version), target)
@@ -136,6 +148,9 @@ pub func purge_all() -> i32:
   let has_compiled = fs.exists(compiled_root())
   if (has_compiled != 0):
     fs.remove_path(compiled_root())
+  let has_runtimes = fs.exists(runtimes_root())
+  if (has_runtimes != 0):
+    fs.remove_path(runtimes_root())
   return ensure_layout()
 
 pub func purge_unused() -> i32:

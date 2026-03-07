@@ -63,10 +63,14 @@ func test_external_sources() -> i32:
   let git_dep_root = path.join(tmp, "gitdep")
   let git_cache_root = cache.package_dir("gitdep", "main")
   let path_cache_root = cache.package_dir("pathdep", "0.3.0")
+  let git_runtime_root = cache.runtime_package_dir("gitdep", "main")
+  let path_runtime_root = cache.runtime_package_dir("pathdep", "0.3.0")
 
   fs.remove_path(tmp)
   fs.remove_path(git_cache_root)
   fs.remove_path(path_cache_root)
+  fs.remove_path(git_runtime_root)
+  fs.remove_path(path_runtime_root)
   fs.mkdir(tmp)
   fs.mkdir(app_root)
   fs.mkdir(path_dep_root)
@@ -83,7 +87,11 @@ func test_external_sources() -> i32:
     return 3
 
   fs.write_file(path.join(path_dep_root, "lib.tg"), "func main() -> i32:\n  return 0\n")
+  fs.mkdir(path.join(path_dep_root, "bin"))
+  fs.write_file(path.join(path_dep_root, "bin/helper.dll"), "path-bin-v1\n")
   fs.write_file(path.join(git_dep_root, "README.txt"), "v1\n")
+  fs.mkdir(path.join(git_dep_root, "runtime"))
+  fs.write_file(path.join(git_dep_root, "runtime/config.txt"), "git-runtime-v1\n")
 
   if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " init"))) == 0):
     return 4
@@ -139,22 +147,33 @@ func test_external_sources() -> i32:
     return 21
   if (expect_true(str.str_eq(lockfile.pkg_source(git_lock), expected_git_lock_source), "git lock source") == 0):
     return 22
+  let cached_path_runtime = path.join(path_runtime_root, "bin/helper.dll")
+  if (expect_true(str.str_eq(str.trim(fs.read_file(cached_path_runtime)), "path-bin-v1"), "path runtime asset copy") == 0):
+    return 23
 
   let cached_git_file = path.join(git_cache_root, "README.txt")
   if (expect_true(str.str_eq(str.trim(fs.read_file(cached_git_file)), "v1"), "git cache initial clone") == 0):
-    return 23
+    return 24
+  let cached_git_runtime = path.join(git_runtime_root, "runtime/config.txt")
+  if (expect_true(str.str_eq(str.trim(fs.read_file(cached_git_runtime)), "git-runtime-v1"), "git runtime asset copy") == 0):
+    return 25
 
   fs.write_file(path.join(git_dep_root, "README.txt"), "v2\n")
+  fs.write_file(path.join(git_dep_root, "runtime/config.txt"), "git-runtime-v2\n")
   if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " add README.txt"))) == 0):
-    return 24
-  if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " commit -m update"))) == 0):
     return 25
+  if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " add runtime/config.txt"))) == 0):
+    return 26
+  if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " commit -m update"))) == 0):
+    return 27
 
   if (downloader.install_git_package("gitdep", "main", git_dep_root, 0) == 0):
     print("FAIL reinstall git dependency")
-    return 26
+    return 28
   if (expect_true(str.str_eq(str.trim(fs.read_file(cached_git_file)), "v2"), "git cache refresh on install") == 0):
-    return 27
+    return 29
+  if (expect_true(str.str_eq(str.trim(fs.read_file(cached_git_runtime)), "git-runtime-v2"), "git runtime asset refresh") == 0):
+    return 30
 
   fs.remove_path(tmp)
   return 0
