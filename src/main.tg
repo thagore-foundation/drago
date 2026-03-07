@@ -49,7 +49,7 @@ func usage():
   print("  runtime-path <package> [asset-dir]")
 
 func drago_version() -> ptr:
-  return str.concat("", "1.0.6")
+  return str.concat("", "1.0.7")
 
 func project_root() -> ptr:
   return fs.getcwd()
@@ -677,6 +677,18 @@ func thagup_windows_args_for_target(target: ptr) -> ptr:
 
   return args
 
+# Builds a POSIX thagc self-update command line.
+func thagc_self_update_posix_cmd(target: ptr) -> ptr:
+  let cmd = str.concat(linker.thagc_bin(), " self-update")
+  cmd = str.concat(cmd, thagup_posix_args_for_target(target))
+  return cmd
+
+# Builds a Windows thagc self-update command line.
+func thagc_self_update_windows_cmd(target: ptr) -> ptr:
+  let cmd = str.concat(linker.thagc_bin(), " self-update")
+  cmd = str.concat(cmd, thagup_windows_args_for_target(target))
+  return cmd
+
 func handle_toolchain_update(target: ptr, quiet: i32, offline: i32) -> bool:
   if (offline != 0):
     out.print_error("--offline cannot be used with toolchain self-update")
@@ -692,16 +704,22 @@ func handle_toolchain_update(target: ptr, quiet: i32, offline: i32) -> bool:
   out.print_action("🛠", str.concat("Updating ", target), quiet)
   let os_name = process.env("OS")
   let cmd = str.concat("", "")
-  if (str.str_eq(os_name, "Windows_NT")):
-    let url_ps = str.concat("https:", str.concat("/", "/raw.githubusercontent.com/thagore-foundation/thagore/main/tooling/release/thagup.ps1"))
-    cmd = str.concat("powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='Stop';$u='", str.concat(url_ps, "';$t=Join-Path $env:TEMP 'thagup.ps1';Invoke-WebRequest -Uri $u -OutFile $t;& powershell -NoProfile -ExecutionPolicy Bypass -File $t"))
-    cmd = str.concat(cmd, thagup_windows_args_for_target(target_text))
-    cmd = str.concat(cmd, "\"")
+  if (fs.exists(linker.thagc_bin()) != 0):
+    if (str.str_eq(os_name, "Windows_NT")):
+      cmd = thagc_self_update_windows_cmd(target_text)
+    else:
+      cmd = thagc_self_update_posix_cmd(target_text)
   else:
-    let url = str.concat("https:", str.concat("/", "/raw.githubusercontent.com/thagore-foundation/thagore/main/tooling/release/thagup.sh"))
-    cmd = str.concat("tmp=\"$(mktemp)\" || exit 1; curl -fsSL \"", str.concat(url, "\" -o \"$tmp\" || { rm -f \"$tmp\"; exit 1; }; bash \"$tmp\""))
-    cmd = str.concat(cmd, thagup_posix_args_for_target(target_text))
-    cmd = str.concat(cmd, "; rc=$?; rm -f \"$tmp\"; exit $rc")
+    if (str.str_eq(os_name, "Windows_NT")):
+      let url_ps = str.concat("https:", str.concat("/", "/raw.githubusercontent.com/thagore-foundation/thagore/main/tooling/release/thagup.ps1"))
+      cmd = str.concat("powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='Stop';$u='", str.concat(url_ps, "';$t=Join-Path $env:TEMP 'thagup.ps1';Invoke-WebRequest -Uri $u -OutFile $t;& powershell -NoProfile -ExecutionPolicy Bypass -File $t"))
+      cmd = str.concat(cmd, thagup_windows_args_for_target(target_text))
+      cmd = str.concat(cmd, "\"")
+    else:
+      let url = str.concat("https:", str.concat("/", "/raw.githubusercontent.com/thagore-foundation/thagore/main/tooling/release/thagup.sh"))
+      cmd = str.concat("tmp=\"$(mktemp)\" || exit 1; curl -fsSL \"", str.concat(url, "\" -o \"$tmp\" || { rm -f \"$tmp\"; exit 1; }; bash \"$tmp\""))
+      cmd = str.concat(cmd, thagup_posix_args_for_target(target_text))
+      cmd = str.concat(cmd, "; rc=$?; rm -f \"$tmp\"; exit $rc")
 
   let rc = process.run(cmd)
   if (rc != 0):
