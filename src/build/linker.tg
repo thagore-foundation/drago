@@ -25,8 +25,17 @@ pub func thagc_bin() -> ptr:
   if (fs.exists(local_bin) != 0):
     return local_bin
 
+  let cargo_debug_bin = path.join(path.join(path.join(cwd, "target"), "debug"), "thagc")
+  if (fs.exists(cargo_debug_bin) != 0):
+    return cargo_debug_bin
+
+  let cargo_release_bin = path.join(path.join(path.join(cwd, "target"), "release"), "thagc")
+  if (fs.exists(cargo_release_bin) != 0):
+    return cargo_release_bin
+
   return str.concat("", "thagc")
 
+# Ensures the target directory exists.
 pub func ensure_target_dir(project_root: ptr) -> i32:
   let t = path.join(project_root, "target")
   return fs.mkdir(t)
@@ -59,9 +68,7 @@ pub func link_project(project_root: ptr, target_triple: ptr, quiet: i32, feature
   let entry = path.join(project_root, entry_rel)
   let cmd = str.concat(thagc_bin(), str.concat(" build ", str.concat(entry, str.concat(" -o ", out_bin))))
   cmd = str.concat(cmd, feature_cli_args(features, all_features, no_default_features))
-  if (str.str_eq(target_triple, "")):
-    cmd = cmd
-  else:
+  if (str.str_eq(target_triple, "") == false):
     cmd = str.concat(cmd, str.concat(" --target=", target_triple))
   let captured = process.capture(str.concat(cmd, " 2>&1"))
   if (fs.exists(out_bin) == 0):
