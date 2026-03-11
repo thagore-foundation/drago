@@ -81,11 +81,11 @@ jobs:
           echo "LD_LIBRARY_PATH=/usr/lib/llvm-21/lib:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
         shell: bash
 
-      - name: Install LLVM 21 runtime (macOS)
+      - name: Install LLVM 14 runtime (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install llvm@21 openssl@3
-          LLVM_PREFIX="$(brew --prefix llvm@21)"
+          brew install llvm@14 openssl@3
+          LLVM_PREFIX="$(brew --prefix llvm@14)"
           OPENSSL_PREFIX="$(brew --prefix openssl@3)"
           echo "${LLVM_PREFIX}/bin" >> "$GITHUB_PATH"
           echo "DYLD_LIBRARY_PATH=${LLVM_PREFIX}/lib:${DYLD_LIBRARY_PATH}" >> "$GITHUB_ENV"
@@ -180,8 +180,7 @@ jobs:
       - name: Build binary (Windows)
         if: runner.os == 'Windows'
         run: |
-          $targetTriple = if ("${{ matrix.arch }}" -eq "aarch64") { "aarch64-pc-windows-msvc" } else { "x86_64-pc-windows-msvc" }
-          thagc build src/main.tg -o "${{ matrix.bin_name }}" --target $targetTriple
+          thagc build src/main.tg -o "${{ matrix.bin_name }}"
         shell: pwsh
 
       - name: Package artifact (POSIX)

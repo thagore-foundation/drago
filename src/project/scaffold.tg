@@ -1,6 +1,5 @@
 import lib.fs as fs
 import lib.path as path
-import lib.process as process
 import src.core.utils as utils
 import std.string as str
 pub func create_project(name: ptr) -> i32:
@@ -31,7 +30,7 @@ pub func create_project(name: ptr) -> i32:
     return 0
 
   let manifest_path = path.join(name, "drago.toml")
-  let nl = process.capture("printf '\\n'")
+  let nl = "\n"
   let manifest = str.concat("[package]", nl)
   manifest = str.concat(manifest, str.concat("name = \"", str.concat(name, str.concat("\"", nl))))
   manifest = str.concat(manifest, str.concat("version = \"0.1.0\"", nl))

@@ -4,7 +4,9 @@ import src.core.utils as utils
 import std.list as list
 import std.string as str
 func is_windows() -> bool:
-  return str.str_eq(process.env("OS"), "Windows_NT")
+  if (str.str_eq(process.env("OS"), "Windows_NT")):
+    return true
+  return str.str_eq(process.env("ComSpec"), "") == false
 
 pub func null_dev() -> ptr:
   if (is_windows()):
@@ -127,9 +129,9 @@ pub func clone_git(url: ptr, git_ref: ptr, dest_dir: ptr) -> i32:
 
     return process.run(clone_cmd)
 
-  let clone_ps = str.concat("& { git clone --depth 1 ", str.concat("\"", str.concat(url, str.concat("\" ", str.concat("\"", str.concat(dest_dir, "\" | Out-Null }"))))))
+  let clone_ps = str.concat("& { git clone --depth 1 '", str.concat(url, str.concat("' '", str.concat(dest_dir, "' | Out-Null }"))))
   if (utils.is_empty(git_ref) == false):
-    clone_ps = str.concat("& { git clone --depth 1 --branch ", str.concat("\"", str.concat(git_ref, str.concat("\" ", str.concat("\"", str.concat(url, str.concat("\" ", str.concat("\"", str.concat(dest_dir, "\" | Out-Null }")))))))))
+    clone_ps = str.concat("& { git clone --depth 1 --branch '", str.concat(git_ref, str.concat("' '", str.concat(url, str.concat("' '", str.concat(dest_dir, "' | Out-Null }"))))))
 
   return process.run(wrap_ps(clone_ps))
 
@@ -141,5 +143,5 @@ pub func copy_dir(src_dir: ptr, dest_dir: ptr) -> i32:
     let cmd = str.concat("cp -R ", str.concat("\"", str.concat(src_dir, str.concat("\" ", str.concat("\"", str.concat(dest_dir, "\""))))))
     return process.run(cmd)
 
-  let ps = str.concat("& { Copy-Item -Path ", str.concat("\"", str.concat(src_dir, str.concat("\" -Destination ", str.concat("\"", str.concat(dest_dir, "\" -Recurse -Force }"))))))
+  let ps = str.concat("& { Copy-Item -LiteralPath '", str.concat(src_dir, str.concat("' -Destination '", str.concat(dest_dir, "' -Recurse -Force }"))))
   return process.run(wrap_ps(ps))

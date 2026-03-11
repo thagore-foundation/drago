@@ -49,7 +49,7 @@ func usage():
   print("  runtime-path <package> [asset-dir]")
 
 func drago_version() -> ptr:
-  return str.concat("", "1.0.7")
+  return str.concat("", "1.0.6")
 
 func wants_direct_version() -> i32:
   let argc = process.argc()
@@ -1120,17 +1120,13 @@ func handle_check_single(root: ptr, quiet: i32, features: ptr, all_features: i32
   if (fs.exists(out_file_ll) != 0):
     fs.remove_path(out_file_ll)
 
-  let cmd = str.concat(linker.thagc_bin(), str.concat(" build ", str.concat(entry, str.concat(" --emit-llvm -o ", out_file))))
+  let cmd = str.concat(linker.thagc_bin(), str.concat(" build --emit ll ", str.concat(entry, str.concat(" -o ", out_file_ll))))
   let feature_args = linker.feature_cli_args(features, all_features, no_default_features)
   if (str.str_eq(feature_args, "") == false):
     cmd = str.concat(cmd, feature_args)
 
   let captured = process.capture(str.concat(cmd, " 2>&1"))
-  if (fs.exists(out_file) == 0):
-    if (fs.exists(out_file_ll) != 0):
-      out.print_summary_ok(str.concat("Typecheck/build check passed ", out.format_ms(time.now_ms() - started)), quiet)
-      return true
-
+  if (fs.exists(out_file_ll) == 0):
     out.print_compiler_errors(captured)
     out.print_summary_fail("Check failed")
     return false

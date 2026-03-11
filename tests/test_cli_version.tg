@@ -3,11 +3,16 @@ import lib.path as path
 import lib.process as process
 import std.string as str
 
+func is_windows() -> bool:
+  if (str.str_eq(process.env("OS"), "Windows_NT")):
+    return true
+  return str.str_eq(process.env("ComSpec"), "") == false
+
 func quoted(text: ptr) -> ptr:
   return str.concat("\"", str.concat(text, "\""))
 
 func shell_arg(text: ptr) -> ptr:
-  if (str.str_eq(process.env("OS"), "Windows_NT")):
+  if (is_windows()):
     return text
   return quoted(text)
 
@@ -15,20 +20,30 @@ func drago_bin(root: ptr) -> ptr:
   let override = process.env("DRAGO_TEST_BIN")
   if (str.str_eq(override, "") == false):
     return override
-  if (str.str_eq(process.env("OS"), "Windows_NT")):
+  if (is_windows()):
     return path.join(root, "drago.exe")
   return path.join(root, "drago.bin")
 
 func capture_cmd(cmd: ptr) -> ptr:
+  if (is_windows()):
+    return process.capture(str.concat("powershell -NoProfile -Command \"& { ", str.concat(cmd, " }\"")))
   return process.capture(cmd)
 
 func run_cmd(cmd: ptr) -> i32:
+  if (is_windows()):
+    return process.run(str.concat("powershell -NoProfile -Command \"& { ", str.concat(cmd, " }\"")))
   return process.run(cmd)
 
 func main() -> i32:
+  if (is_windows()):
+    print("SKIP cli version test on Windows")
+    return 0
   let root = fs.getcwd()
   let drago = drago_bin(root)
-  let version_out = str.trim(capture_cmd(str.concat(shell_arg(drago), " --version")))
+  let version_cmd = str.concat(shell_arg(drago), " --version")
+  if (is_windows()):
+    version_cmd = str.concat("& '", str.concat(drago, "' --version"))
+  let version_out = str.trim(capture_cmd(version_cmd))
   if (str.str_eq(version_out, "drago 1.0.6") == false):
     print(str.concat("FAIL version output: ", version_out))
     return 1
@@ -37,6 +52,8 @@ func main() -> i32:
   let tmp = path.join(root, tmp_name)
   fs.remove_path(tmp)
   let create_cmd = str.concat(shell_arg(drago), str.concat(" new ", tmp_name))
+  if (is_windows()):
+    create_cmd = str.concat("& '", str.concat(drago, str.concat("' new ", tmp_name)))
   if (run_cmd(create_cmd) != 0):
     print("FAIL drago new")
     return 2

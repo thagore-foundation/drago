@@ -6,6 +6,11 @@ import std.string as str
 import src.project.lockfile as lockfile
 import src.project.manifest as manifest
 
+func is_windows() -> bool:
+  if (str.str_eq(process.env("OS"), "Windows_NT")):
+    return true
+  return str.str_eq(process.env("ComSpec"), "") == false
+
 func expect_true(ok: bool, label: ptr) -> i32:
   if (ok):
     return 1
@@ -13,10 +18,17 @@ func expect_true(ok: bool, label: ptr) -> i32:
   return 0
 
 func quoted(text: ptr) -> ptr:
+  if (is_windows()):
+    return text
   return str.concat("\"", str.concat(text, "\""))
 
+func run_git(dir: ptr, args: ptr) -> i32:
+  if (is_windows()):
+    return run_cmd(str.concat("powershell -NoProfile -Command \"& { Set-Location -LiteralPath '", str.concat(dir, str.concat("'; git ", str.concat(args, "\" }")))))
+  return run_cmd(str.concat("git -C ", str.concat(quoted(dir), str.concat(" ", args))))
+
 func shell_arg(text: ptr) -> ptr:
-  if (str.str_eq(process.env("OS"), "Windows_NT")):
+  if (is_windows()):
     return text
   return quoted(text)
 
@@ -24,12 +36,12 @@ func drago_bin(root: ptr) -> ptr:
   let override = process.env("DRAGO_TEST_BIN")
   if (str.str_eq(override, "") == false):
     return override
-  if (str.str_eq(process.env("OS"), "Windows_NT")):
+  if (is_windows()):
     return path.join(root, "drago.exe")
   return path.join(root, "drago.bin")
 
 func run_drago_in_dir(dir: ptr, drago: ptr, args: ptr) -> i32:
-  if (str.str_eq(process.env("OS"), "Windows_NT")):
+  if (is_windows()):
     let body = str.concat("cd /d ", str.concat(dir, str.concat(" && ", str.concat(drago, str.concat(" ", args)))))
     let full = str.concat("cmd /c \"", str.concat(body, "\""))
     return process.run(full)
@@ -37,7 +49,7 @@ func run_drago_in_dir(dir: ptr, drago: ptr, args: ptr) -> i32:
   return process.run(full)
 
 func capture_drago_in_dir(dir: ptr, drago: ptr, args: ptr) -> ptr:
-  if (str.str_eq(process.env("OS"), "Windows_NT")):
+  if (is_windows()):
     return str.concat("", "")
   let full = str.concat("cd ", str.concat(quoted(dir), str.concat(" && ", str.concat(quoted(drago), str.concat(" ", args)))))
   return process.capture(full)
@@ -85,7 +97,7 @@ func find_lock_line(lines: ptr, dep_name: ptr) -> ptr:
   return str.concat("", "")
 
 func test_cli_sources() -> i32:
-  if (str.str_eq(process.env("OS"), "Windows_NT")):
+  if (is_windows()):
     print("SKIP cli source add test on Windows")
     return 0
   let cwd = fs.getcwd()
@@ -118,17 +130,17 @@ func test_cli_sources() -> i32:
   fs.mkdir(path.join(git_dep_root, "runtime"))
   fs.write_file(path.join(git_dep_root, "runtime/config.txt"), "git-cli-runtime\n")
 
-  if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " init"))) == 0):
+  if (run_git(git_dep_root, "init") == 0):
     return 4
-  if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " branch -M main"))) == 0):
+  if (run_git(git_dep_root, "branch -M main") == 0):
     return 5
-  if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " config user.email test@example.com"))) == 0):
+  if (run_git(git_dep_root, "config user.email test@example.com") == 0):
     return 6
-  if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " config user.name test-user"))) == 0):
+  if (run_git(git_dep_root, "config user.name test-user") == 0):
     return 7
-  if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " add ."))) == 0):
+  if (run_git(git_dep_root, "add .") == 0):
     return 8
-  if (run_cmd(str.concat("git -C ", str.concat(quoted(git_dep_root), " commit -m init"))) == 0):
+  if (run_git(git_dep_root, "commit -m init") == 0):
     return 9
 
   let add_path_args = str.concat("add --path ", str.concat(shell_arg(path_dep_root), " --alias pathcli --yes"))
