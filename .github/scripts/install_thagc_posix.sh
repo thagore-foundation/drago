@@ -40,7 +40,7 @@ echo "installing thagc ${THAGC_TAG} (${CHANNEL})"
 rm -rf "${PREFIX}"
 mkdir -p "${PREFIX}"
 curl -fsSL "${ASSET_URL}" -o "${TMP_ARCHIVE}"
-tar -xzf "${TMP_ARCHIVE}" -C "${PREFIX}"
+tar -xzf "${TMP_ARCHIVE}" -C "${PREFIX}" --strip-components=1
 
 if [[ -n "${GITHUB_PATH:-}" ]]; then
   echo "${PREFIX}/bin" >>"${GITHUB_PATH}"
