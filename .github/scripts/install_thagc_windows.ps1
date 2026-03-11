@@ -8,14 +8,11 @@ $ErrorActionPreference = "Stop"
 $scriptUrl = "https://github.com/thagore-foundation/thagore/releases/latest/download/thagup.ps1"
 $tmpPath = Join-Path $env:RUNNER_TEMP "thagup.ps1"
 $prefix = Join-Path $HOME ".thagore"
+$target = if ($Arch -eq "aarch64" -or $Arch -eq "arm64") { "aarch64-pc-windows-msvc" } else { "x86_64-pc-windows-msvc" }
 
 Write-Host "installing thagc $Tag ($Channel)"
 Invoke-WebRequest -Uri $scriptUrl -OutFile $tmpPath
-if ([string]::IsNullOrWhiteSpace($Arch)) {
-  powershell -ExecutionPolicy Bypass -File $tmpPath -Tag $Tag -Channel $Channel -Prefix $prefix -Force
-} else {
-  powershell -ExecutionPolicy Bypass -File $tmpPath -Tag $Tag -Channel $Channel -Arch $Arch -Prefix $prefix -Force
-}
+powershell -ExecutionPolicy Bypass -File $tmpPath -Tag $Tag -Channel $Channel -Target $target -Prefix $prefix -WithoutDrago -Force
 
 $binPath = Join-Path $prefix "bin"
 if ($env:GITHUB_PATH) {

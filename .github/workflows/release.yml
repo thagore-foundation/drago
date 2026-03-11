@@ -174,37 +174,14 @@ jobs:
       - name: Build binary (POSIX)
         if: runner.os != 'Windows'
         run: |
-          if [[ "${{ runner.os }}" == "macOS" ]]; then
-            thagc build src/main.tg -o "${{ matrix.bin_name }}" \
-              --link-dir="${OPENSSL_PREFIX}/lib" \
-              --link-lib=ssl \
-              --link-lib=crypto \
-              --link-lib=sqlite3 \
-              --link-lib=c++ \
-              --link-lib=c++abi
-          else
-            thagc build src/main.tg -o "${{ matrix.bin_name }}" --link-lib=sqlite3
-          fi
+          thagc build src/main.tg -o "${{ matrix.bin_name }}"
         shell: bash
 
       - name: Build binary (Windows)
         if: runner.os == 'Windows'
         run: |
           $targetTriple = if ("${{ matrix.arch }}" -eq "aarch64") { "aarch64-pc-windows-msvc" } else { "x86_64-pc-windows-msvc" }
-          thagc build src/main.tg -o "${{ matrix.bin_name }}" `
-            --target $targetTriple `
-            --link-lib=msvcprtd `
-            --link-lib=ucrtd `
-            --link-lib=vcruntimed `
-            --link-lib=msvcrtd `
-            --link-lib=kernel32 `
-            --link-lib=user32 `
-            --link-lib=advapi32 `
-            --link-lib=shell32 `
-            --link-lib=ws2_32 `
-            --link-lib=iphlpapi `
-            --link-lib=bcrypt `
-            --link-lib=legacy_stdio_definitions
+          thagc build src/main.tg -o "${{ matrix.bin_name }}" --target $targetTriple
         shell: pwsh
 
       - name: Package artifact (POSIX)
