@@ -4,7 +4,8 @@ set -euo pipefail
 THAGC_TAG="${1:-v0.9.6}"
 CHANNEL="${2:-indev}"
 ARCH="${3:-}"
-SCRIPT_URL="https://thagore.org/thagup.sh"
+SCRIPT_URL="https://github.com/thagore-foundation/thagore/releases/latest/download/thagup.sh"
+PREFIX="${HOME}/.thagore"
 TMP_SCRIPT="$(mktemp)"
 
 cleanup() {
@@ -15,13 +16,13 @@ trap cleanup EXIT
 echo "installing thagc ${THAGC_TAG} (${CHANNEL})"
 curl -fsSL "${SCRIPT_URL}" -o "${TMP_SCRIPT}"
 if [[ -n "${ARCH}" ]]; then
-  bash "${TMP_SCRIPT}" --tag "${THAGC_TAG}" --channel "${CHANNEL}" --arch "${ARCH}" --without-drago --force
+  bash "${TMP_SCRIPT}" --tag "${THAGC_TAG}" --channel "${CHANNEL}" --arch "${ARCH}" --prefix "${PREFIX}" --force
 else
-  bash "${TMP_SCRIPT}" --tag "${THAGC_TAG}" --channel "${CHANNEL}" --without-drago --force
+  bash "${TMP_SCRIPT}" --tag "${THAGC_TAG}" --channel "${CHANNEL}" --prefix "${PREFIX}" --force
 fi
 
 if [[ -n "${GITHUB_PATH:-}" ]]; then
-  echo "${HOME}/.thagore/bin" >>"${GITHUB_PATH}"
+  echo "${PREFIX}/bin" >>"${GITHUB_PATH}"
 fi
 
-"${HOME}/.thagore/bin/thagc" --version
+"${PREFIX}/bin/thagc" --version

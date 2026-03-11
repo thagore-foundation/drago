@@ -5,18 +5,19 @@ Param(
 )
 
 $ErrorActionPreference = "Stop"
-$scriptUrl = "https://thagore.org/thagup.ps1"
+$scriptUrl = "https://github.com/thagore-foundation/thagore/releases/latest/download/thagup.ps1"
 $tmpPath = Join-Path $env:RUNNER_TEMP "thagup.ps1"
+$prefix = Join-Path $HOME ".thagore"
 
 Write-Host "installing thagc $Tag ($Channel)"
 Invoke-WebRequest -Uri $scriptUrl -OutFile $tmpPath
 if ([string]::IsNullOrWhiteSpace($Arch)) {
-  powershell -ExecutionPolicy Bypass -File $tmpPath -Tag $Tag -Channel $Channel -WithoutDrago -Force
+  powershell -ExecutionPolicy Bypass -File $tmpPath -Tag $Tag -Channel $Channel -Prefix $prefix -Force
 } else {
-  powershell -ExecutionPolicy Bypass -File $tmpPath -Tag $Tag -Channel $Channel -Arch $Arch -WithoutDrago -Force
+  powershell -ExecutionPolicy Bypass -File $tmpPath -Tag $Tag -Channel $Channel -Arch $Arch -Prefix $prefix -Force
 }
 
-$binPath = Join-Path $HOME ".thagore\bin"
+$binPath = Join-Path $prefix "bin"
 if ($env:GITHUB_PATH) {
   Add-Content -Path $env:GITHUB_PATH -Value $binPath
 }
