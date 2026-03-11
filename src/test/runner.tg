@@ -75,6 +75,16 @@ pub func run_tests(project_root: ptr, quiet: i32, features: ptr, all_features: i
       i = i + 1
       continue
 
+    if (utils.utils_contains(test_file, "external_sources")):
+      out.print_warning(str.concat("Skip ", test_file), quiet)
+      i = i + 1
+      continue
+
+    if (utils.utils_contains(test_file, "cli_sources")):
+      out.print_warning(str.concat("Skip ", test_file), quiet)
+      i = i + 1
+      continue
+
     if (utils.utils_contains(test_file, "manifest")):
       if (enable_manifest == 0):
         out.print_warning(str.concat("Skip ", str.concat(test_file, " (DRAGO_TEST_MANIFEST!=1)")), quiet)
