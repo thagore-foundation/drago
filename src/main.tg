@@ -51,6 +51,18 @@ func usage():
 func drago_version() -> ptr:
   return str.concat("", "1.0.7")
 
+func wants_direct_version() -> i32:
+  let argc = process.argc()
+  let i = 1
+  while (i < argc):
+    let a = process.argv(i)
+    if (str.str_eq(a, "--version")):
+      return 1
+    if (str.str_eq(a, "-V")):
+      return 1
+    i = i + 1
+  return 0
+
 func project_root() -> ptr:
   return fs.getcwd()
 
@@ -1177,6 +1189,9 @@ func handle_audit(root: ptr, quiet: i32, offline: i32) -> bool:
   return true
 
 func main() -> i32:
+  if (wants_direct_version() != 0):
+    print(str.concat("drago ", drago_version()))
+    return 0
   let parsed = parser.parse()
   let cmd = parser.parsed_kind(parsed)
   let arg1 = parser.parsed_arg1(parsed)

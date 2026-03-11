@@ -3,69 +3,52 @@ import src.core.utils as utils
 import std.list as list
 import std.string as str
 pub func command_from_text(raw: ptr) -> ptr:
+  if (str.str_eq(raw, "-h")):
+    return str.concat("", "help")
   if (str.str_eq(raw, "--help")):
     return str.concat("", "help")
-
   if (str.str_eq(raw, "help")):
     return str.concat("", "help")
-
+  if (str.str_eq(raw, "-V")):
+    return str.concat("", "version")
   if (str.str_eq(raw, "--version")):
     return str.concat("", "version")
-
   if (str.str_eq(raw, "version")):
     return str.concat("", "version")
-
   if (str.str_eq(raw, "new")):
     return str.concat("", "new")
-
   if (str.str_eq(raw, "build")):
     return str.concat("", "build")
-
   if (str.str_eq(raw, "run")):
     return str.concat("", "run")
-
   if (str.str_eq(raw, "test")):
     return str.concat("", "test")
-
   if (str.str_eq(raw, "add")):
     return str.concat("", "add")
-
   if (str.str_eq(raw, "remove")):
     return str.concat("", "remove")
-
   if (str.str_eq(raw, "install")):
     return str.concat("", "install")
-
   if (str.str_eq(raw, "update")):
     return str.concat("", "update")
-
   if (str.str_eq(raw, "publish")):
     return str.concat("", "publish")
-
   if (str.str_eq(raw, "fmt")):
     return str.concat("", "fmt")
-
   if (str.str_eq(raw, "check")):
     return str.concat("", "check")
-
   if (str.str_eq(raw, "cache")):
     return str.concat("", "cache")
-
   if (str.str_eq(raw, "audit")):
     return str.concat("", "audit")
-
   if (str.str_eq(raw, "tree")):
     return str.concat("", "tree")
-
   if (str.str_eq(raw, "why")):
     return str.concat("", "why")
-
   if (str.str_eq(raw, "outdated")):
     return str.concat("", "outdated")
-
   if (str.str_eq(raw, "runtime-path")):
     return str.concat("", "runtime-path")
-
   return str.concat("", "")
 
 pub func parse() -> ptr:

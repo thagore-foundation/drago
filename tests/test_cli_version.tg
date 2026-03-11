@@ -1,0 +1,50 @@
+import lib.fs as fs
+import lib.path as path
+import lib.process as process
+import std.string as str
+
+func quoted(text: ptr) -> ptr:
+  return str.concat("\"", str.concat(text, "\""))
+
+func shell_arg(text: ptr) -> ptr:
+  if (str.str_eq(process.env("OS"), "Windows_NT")):
+    return text
+  return quoted(text)
+
+func drago_bin(root: ptr) -> ptr:
+  let override = process.env("DRAGO_TEST_BIN")
+  if (str.str_eq(override, "") == false):
+    return override
+  if (str.str_eq(process.env("OS"), "Windows_NT")):
+    return path.join(root, "drago.exe")
+  return path.join(root, "drago.bin")
+
+func capture_cmd(cmd: ptr) -> ptr:
+  return process.capture(cmd)
+
+func run_cmd(cmd: ptr) -> i32:
+  return process.run(cmd)
+
+func main() -> i32:
+  let root = fs.getcwd()
+  let drago = drago_bin(root)
+  let version_out = str.trim(capture_cmd(str.concat(shell_arg(drago), " --version")))
+  if (str.str_eq(version_out, "drago 1.0.6") == false):
+    print(str.concat("FAIL version output: ", version_out))
+    return 1
+
+  let tmp_name = "tmp_cli_version_test"
+  let tmp = path.join(root, tmp_name)
+  fs.remove_path(tmp)
+  let create_cmd = str.concat(shell_arg(drago), str.concat(" new ", tmp_name))
+  if (run_cmd(create_cmd) != 0):
+    print("FAIL drago new")
+    return 2
+  if (fs.exists(path.join(tmp, "drago.toml")) == 0):
+    print("FAIL missing drago.toml")
+    return 3
+  if (fs.exists(path.join(path.join(tmp, "src"), "main.tg")) == 0):
+    print("FAIL missing scaffold main.tg")
+    return 4
+  fs.remove_path(tmp)
+  return 0
