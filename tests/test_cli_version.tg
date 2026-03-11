@@ -9,12 +9,10 @@ func is_windows() -> bool:
   return str.str_eq(process.env("ComSpec"), "") == false
 
 func quoted(text: ptr) -> ptr:
-  return str.concat("\"", str.concat(text, "\""))
+  return text
 
 func shell_arg(text: ptr) -> ptr:
-  if (is_windows()):
-    return text
-  return quoted(text)
+  return text
 
 func drago_bin(root: ptr) -> ptr:
   let override = process.env("DRAGO_TEST_BIN")

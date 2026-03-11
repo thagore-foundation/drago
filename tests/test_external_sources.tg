@@ -20,14 +20,12 @@ func expect_true(ok: bool, label: ptr) -> i32:
   return 0
 
 func quoted(text: ptr) -> ptr:
-  if (is_windows()):
-    return text
-  return str.concat("\"", str.concat(text, "\""))
+  return text
 
 func run_git(dir: ptr, args: ptr) -> i32:
   if (is_windows()):
     return run_cmd(str.concat("powershell -NoProfile -Command \"& { Set-Location -LiteralPath '", str.concat(dir, str.concat("'; git ", str.concat(args, "\" }")))))
-  return run_cmd(str.concat("git -C ", str.concat(quoted(dir), str.concat(" ", args))))
+  return run_cmd(str.concat("git -C ", str.concat(dir, str.concat(" ", args))))
 
 func write_basic_manifest(root: ptr, name: ptr, version: ptr, runtime_dirs: ptr) -> i32:
   let raw = str.concat("[package]\n", "")

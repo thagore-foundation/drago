@@ -18,19 +18,15 @@ func expect_true(ok: bool, label: ptr) -> i32:
   return 0
 
 func quoted(text: ptr) -> ptr:
-  if (is_windows()):
-    return text
-  return str.concat("\"", str.concat(text, "\""))
+  return text
 
 func run_git(dir: ptr, args: ptr) -> i32:
   if (is_windows()):
     return run_cmd(str.concat("powershell -NoProfile -Command \"& { Set-Location -LiteralPath '", str.concat(dir, str.concat("'; git ", str.concat(args, "\" }")))))
-  return run_cmd(str.concat("git -C ", str.concat(quoted(dir), str.concat(" ", args))))
+  return run_cmd(str.concat("git -C ", str.concat(dir, str.concat(" ", args))))
 
 func shell_arg(text: ptr) -> ptr:
-  if (is_windows()):
-    return text
-  return quoted(text)
+  return text
 
 func drago_bin(root: ptr) -> ptr:
   let override = process.env("DRAGO_TEST_BIN")
@@ -45,13 +41,13 @@ func run_drago_in_dir(dir: ptr, drago: ptr, args: ptr) -> i32:
     let body = str.concat("cd /d ", str.concat(dir, str.concat(" && ", str.concat(drago, str.concat(" ", args)))))
     let full = str.concat("cmd /c \"", str.concat(body, "\""))
     return process.run(full)
-  let full = str.concat("cd ", str.concat(quoted(dir), str.concat(" && ", str.concat(quoted(drago), str.concat(" ", args)))))
+  let full = str.concat("cd ", str.concat(dir, str.concat(" && ", str.concat(drago, str.concat(" ", args)))))
   return process.run(full)
 
 func capture_drago_in_dir(dir: ptr, drago: ptr, args: ptr) -> ptr:
   if (is_windows()):
     return str.concat("", "")
-  let full = str.concat("cd ", str.concat(quoted(dir), str.concat(" && ", str.concat(quoted(drago), str.concat(" ", args)))))
+  let full = str.concat("cd ", str.concat(dir, str.concat(" && ", str.concat(drago, str.concat(" ", args)))))
   return process.capture(full)
 
 func write_basic_manifest(root: ptr, name: ptr, version: ptr, runtime_dirs: ptr) -> i32:
