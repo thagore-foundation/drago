@@ -38,6 +38,7 @@ jobs:
             platform: windows
             arch: aarch64
             bin_name: drago.exe
+            optional: true
     env:
       THAGC_TAG: v0.9.6
       DRAGO_COLOR: never

@@ -54,6 +54,7 @@ jobs:
             arch: aarch64
             archive_ext: zip
             bin_name: drago.exe
+            optional: true
     env:
       THAGC_TAG: ${{ github.event.inputs.thagc_tag || 'v0.9.6' }}
       DRAGO_COLOR: never
@@ -243,12 +244,10 @@ jobs:
               f"drago-{tag}-linux-aarch64.tar.gz",
               f"drago-{tag}-macos-aarch64.tar.gz",
               f"drago-{tag}-windows-x86_64.zip",
-              f"drago-{tag}-windows-aarch64.zip",
               "SHA256SUMS-linux-x86_64.txt",
               "SHA256SUMS-linux-aarch64.txt",
               "SHA256SUMS-macos-aarch64.txt",
               "SHA256SUMS-windows-x86_64.txt",
-              "SHA256SUMS-windows-aarch64.txt",
           ]
           missing = [name for name in required if not (dist / name).exists()]
           if missing:

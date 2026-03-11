@@ -52,14 +52,13 @@ pub func run_tests(project_root: ptr, quiet: i32, features: ptr, all_features: i
   if (str.str_eq(process.env("DRAGO_TEST_MANIFEST"), "1")):
     enable_manifest = 1
 
-  let os_name = process.env("OS")
   let link_arg = str.concat("", env_link)
-  if (utils.is_empty(env_link)):
-    if (str.str_eq(os_name, "Windows_NT") == false):
-      link_arg = str.concat("", " --link-lib=sqlite3")
+  if (utils.is_empty(link_arg)):
+    if (enable_manifest != 0):
+      out.print_warning("manifest tests need DRAGO_TEST_LINK because thagc v0.9.6 has no --link-lib flag.", quiet)
+      enable_manifest = 0
     else:
-      link_arg = str.concat("", "")
-      out.print_warning("sqlite3 auto-link is disabled on Windows tests.", quiet)
+      out.print_warning("manifest tests are skipped unless DRAGO_TEST_MANIFEST=1 and DRAGO_TEST_LINK is set.", quiet)
 
   let target_dir = path.join(project_root, "target")
   fs.mkdir(target_dir)
