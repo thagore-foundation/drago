@@ -39,7 +39,7 @@ jobs:
             arch: aarch64
             bin_name: drago.exe
     env:
-      THAGC_TAG: v1.0.1
+      THAGC_TAG: v0.9.6
       DRAGO_COLOR: never
     steps:
       - uses: actions/checkout@v4
@@ -69,7 +69,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           chmod +x .github/scripts/install_thagc_posix.sh
-          .github/scripts/install_thagc_posix.sh "${THAGC_TAG}" stable "${{ matrix.arch }}"
+          .github/scripts/install_thagc_posix.sh "${THAGC_TAG}" indev "${{ matrix.arch }}"
         shell: bash
 
       - name: Install LLVM 21 runtime (Windows)
@@ -138,7 +138,7 @@ jobs:
 
       - name: Install thagc (Windows)
         if: runner.os == 'Windows'
-        run: .github/scripts/install_thagc_windows.ps1 -Tag "${{ env.THAGC_TAG }}" -Channel stable -Arch "${{ matrix.arch }}"
+        run: .github/scripts/install_thagc_windows.ps1 -Tag "${{ env.THAGC_TAG }}" -Channel indev -Arch "${{ matrix.arch }}"
         shell: pwsh
 
       - name: Verify toolchain

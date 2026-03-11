@@ -13,7 +13,7 @@ on:
       thagc_tag:
         description: "thagc release tag used to build drago"
         required: false
-        default: "v1.5.1"
+        default: "v0.9.6"
         type: string
 
 permissions:
@@ -55,7 +55,7 @@ jobs:
             archive_ext: zip
             bin_name: drago.exe
     env:
-      THAGC_TAG: ${{ github.event.inputs.thagc_tag || 'v1.5.1' }}
+      THAGC_TAG: ${{ github.event.inputs.thagc_tag || 'v0.9.6' }}
       DRAGO_COLOR: never
     steps:
       - uses: actions/checkout@v4
@@ -96,7 +96,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           chmod +x .github/scripts/install_thagc_posix.sh
-          .github/scripts/install_thagc_posix.sh "${THAGC_TAG}" stable "${{ matrix.arch }}"
+          .github/scripts/install_thagc_posix.sh "${THAGC_TAG}" indev "${{ matrix.arch }}"
         shell: bash
 
       - name: Install LLVM 21 runtime (Windows)
@@ -165,7 +165,7 @@ jobs:
 
       - name: Install thagc (Windows)
         if: runner.os == 'Windows'
-        run: .github/scripts/install_thagc_windows.ps1 -Tag "${{ env.THAGC_TAG }}" -Channel stable -Arch "${{ matrix.arch }}"
+        run: .github/scripts/install_thagc_windows.ps1 -Tag "${{ env.THAGC_TAG }}" -Channel indev -Arch "${{ matrix.arch }}"
         shell: pwsh
 
       - name: Verify toolchain

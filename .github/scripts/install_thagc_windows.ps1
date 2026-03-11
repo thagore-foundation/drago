@@ -1,6 +1,6 @@
 Param(
-  [string]$Tag = "v1.0.1",
-  [string]$Channel = "stable",
+  [string]$Tag = "v0.9.6",
+  [string]$Channel = "indev",
   [string]$Arch = ""
 )
 

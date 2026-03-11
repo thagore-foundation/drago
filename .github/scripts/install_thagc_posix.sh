@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-THAGC_TAG="${1:-v1.0.1}"
-CHANNEL="${2:-stable}"
+THAGC_TAG="${1:-v0.9.6}"
+CHANNEL="${2:-indev}"
 ARCH="${3:-}"
 SCRIPT_URL="https://thagore.org/thagup.sh"
 TMP_SCRIPT="$(mktemp)"
