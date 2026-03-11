@@ -57,8 +57,9 @@ func json_string_field(raw: ptr, key: ptr) -> ptr:
 
 func version_component(version_text: ptr, index: i64) -> i64:
   let parts = str.split(version_text, ".")
+  let zero: i64 = 0
   if (list.list_count(parts) <= index):
-    return 0
+    return zero
 
   return str.to_int(str.trim(list.list_get(parts, index)))
 
@@ -109,7 +110,7 @@ pub func ensure_thagc() -> i32:
     return 0
 
   if (version_at_least(version, minimum_thagc_version()) == 0):
-    out.print_error(str.concat("thagc ", str.concat(version, str.concat(" found, but drago 1.0.7 requires thagc ", str.concat(minimum_thagc_version(), "+")))))
+    out.print_error(str.concat("thagc ", str.concat(version, str.concat(" found, but drago 1.0.6 requires thagc ", str.concat(minimum_thagc_version(), "+")))))
     print("run: drago update thagc")
     return 0
 
